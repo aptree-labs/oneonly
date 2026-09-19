@@ -27,9 +27,7 @@ type Assets = {
 export function TradePanel({ token }: { token: Token }) {
   const app = useLaunchpad();
   const [side, setSide] = useState<"buy" | "sell">("buy"),
-    [settlement, setSettlement] = useState(
-      app.network === "mainnet-beta" ? "SOL" : token.quote,
-    ),
+    [settlement, setSettlement] = useState(token.quote),
     [amount, setAmount] = useState(""),
     [slippage, setSlippage] = useState("1"),
     [assets, setAssets] = useState<Assets | null>(null),
@@ -90,8 +88,8 @@ export function TradePanel({ token }: { token: Token }) {
     ? assets.assets
     : [
         ...new Set([
-          app.network === "mainnet-beta" ? "SOL" : token.quote,
           token.quote,
+          app.network === "mainnet-beta" ? "SOL" : token.quote,
           settlement,
         ]),
       ].map((symbol) => ({
