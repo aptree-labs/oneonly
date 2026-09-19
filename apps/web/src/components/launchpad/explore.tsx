@@ -27,6 +27,7 @@ export type Token = {
   usdReferenceTime?: number | null;
   volumeUsd24h?: number | null;
   volumeComplete?: boolean;
+  volumeUnpricedTrades?: number;
   snapshot: {
     priceQuote: string;
     marketCapQuote: string;
@@ -136,8 +137,18 @@ export function TokenCard({
             <span>
               {token.volumeComplete ? "24h volume" : "Indexed 24h vol."}
             </span>
-            <strong>
-              {token.volumeUsd24h == null ? "—" : usd(token.volumeUsd24h)}
+            <strong
+              title={
+                token.volumeComplete
+                  ? undefined
+                  : "Verified USD volume so far. More trades or historical prices are still being indexed."
+              }
+            >
+              {token.volumeUsd24h == null
+                ? token.volumeUnpricedTrades
+                  ? "Pricing…"
+                  : "—"
+                : `${usd(token.volumeUsd24h)}${!token.volumeComplete && token.volumeUsd24h > 0 ? "+" : ""}`}
             </strong>
           </div>
         )}

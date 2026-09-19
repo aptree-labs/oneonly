@@ -81,10 +81,13 @@ export async function marketListings(
     number | null
   >`case when (${poolSnapshots.graduated} = false or ${poolSnapshots.marketVenue} = 'damm-v2') then
     ${poolSnapshots.marketCapQuote}::numeric * ${reference} end`;
+  // A delayed historical reference must not hide turnover already verified.
+  // All-unpriced history remains unknown, while mixed history exposes a subtotal.
   const volumeUsd24h = sql<
     number | null
   >`case when ${poolSnapshots.tokenId} is not null
-    and (${poolSnapshots.graduated} = false or ${poolSnapshots.marketVenue} = 'damm-v2') and coalesce(${volume.unknown}, 0) = 0
+    and (${poolSnapshots.graduated} = false or ${poolSnapshots.marketVenue} = 'damm-v2')
+    and (coalesce(${volume.unknown}, 0) = 0 or ${volume.usd} is not null)
     then coalesce(${volume.usd}, 0)::numeric end`;
   const term = options.search.trim().replace(/^\$/, "").toLowerCase();
   const pair =
@@ -119,6 +122,9 @@ export async function marketListings(
       snapshot: poolSnapshots,
       marketCapUsd: marketCapUsd.mapWith(Number),
       volumeUsd24h: volumeUsd24h.mapWith(Number),
+      volumeUnpricedTrades: sql<number>`coalesce(${volume.unknown}, 0)`.mapWith(
+        Number,
+      ),
       total: sql<number>`count(*) over()`.mapWith(Number),
       graduatedIndex: graduatedIndexes,
     })
@@ -155,11 +161,19 @@ export async function marketListings(
     .offset(options.page * 24);
   return {
     tokens: rows.map(
-      ({ token, snapshot, marketCapUsd, volumeUsd24h, graduatedIndex }) => ({
+      ({
+        token,
+        snapshot,
+        marketCapUsd,
+        volumeUsd24h,
+        volumeUnpricedTrades,
+        graduatedIndex,
+      }) => ({
         ...token,
         snapshot,
         marketCapUsd,
         volumeUsd24h,
+        volumeUnpricedTrades,
         volumeComplete:
           !!snapshot &&
           (!snapshot.graduated ||
@@ -170,6 +184,7 @@ export async function marketListings(
               !!snapshot.indexedThrough &&
               snapshot.indexedThrough >= graduatedIndex.coverageStart)) &&
           volumeUsd24h !== null &&
+          volumeUnpricedTrades === 0 &&
           !!snapshot.coverageStart &&
           snapshot.coverageStart <=
             new Date(

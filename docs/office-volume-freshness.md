@@ -75,3 +75,26 @@ Deployed app build: `dpl_5La6ABK9AQyi85T63oDRSHsqsum2`.
   USD valuation is still marked partial where an asset reference is unavailable.
 - Newest-sort first result: the exact official ONEONLY mint.
 - 53 focused tests passed, TypeScript passed, and the production build passed.
+
+## Explore volume subtotal — 2026-09-19 UTC
+
+A single indexed trade with `volume_usd = NULL` previously hid the entire token's
+24-hour volume. This is especially noticeable on an active DAMM pool because
+new trades can arrive before their historical price candle is available.
+
+Explore now returns the sum of already-priced trades and the number still
+unpriced. `volumeComplete` remains false until both history coverage and pricing
+are complete. The card shows `Indexed 24h vol.` with a `+` on a positive subtotal;
+all-unpriced history remains null and displays `Pricing…`, not a false zero.
+Existing historical-price retries and history scans continue unchanged. No live
+spot price is substituted for missing historical evidence.
+
+Regression checks cover mixed DAMM pricing, entirely unpriced history, and a
+fully covered DBC pool whose historical pricing is incomplete. The rolling
+24-hour boundaries, ranking, and official-token pin remain covered as well.
+
+Production check for `dpl_3QqHhqrShRdmZkpp2mz7CLGfnfGi`: ONEONLY returned
+`volumeUsd24h: 56942.9832547`, `volumeUnpricedTrades: 2`, and
+`volumeComplete: false`. The first landing card rendered `$56.94K+`.
+Twelve market-query tests, eight discovery tests, TypeScript, and the production
+build passed.

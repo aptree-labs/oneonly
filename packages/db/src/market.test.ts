@@ -263,3 +263,78 @@ it("pins the official mainnet mint ahead of sorting before pagination", async ()
   const search = await marketListings(local.db, { ...options, network: "mainnet-beta", search: "OTHER" });
   expect(search.tokens.some((t) => t.id === official.id)).toBe(false);
 });
+
+it("keeps verified graduated volume visible while a newer trade awaits its historical price", async () => {
+  const network = "partial-volume-fixture";
+  const fixture = {
+    ...tokens[0],
+    id: randomUUID(),
+    network,
+    ticker: "PARTIAL",
+    mint: "partial-volume-mint",
+    pool: "partial-volume-pool",
+    activatedAt: new Date(now.getTime() - 86400000),
+  };
+  await local.db.insert(launchTokens).values(fixture);
+  await local.db.insert(poolSnapshots).values({
+    tokenId: fixture.id,
+    priceQuote: "1",
+    marketCapQuote: "100",
+    quoteReserve: "2",
+    progress: 100,
+    graduated: true,
+    marketVenue: "damm-v2",
+    creatorQuoteFee: "0",
+    coverageStart: fixture.activatedAt,
+    indexedThrough: now,
+  });
+  const trade = {
+    tokenId: fixture.id,
+    eventIndex: 0,
+    venue: "damm-v2",
+    wallet: "fixture",
+    side: "buy",
+    baseAmount: "1",
+    quoteAmount: "2",
+    priceQuote: "2",
+    blockTime: new Date(now.getTime() - 1000),
+  };
+  await local.db.insert(tokenTrades).values([
+    { ...trade, signature: "partial-priced", volumeUsd: 200 },
+    { ...trade, signature: "partial-unpriced", volumeUsd: null },
+    {
+      ...trade,
+      signature: "partial-old",
+      volumeUsd: 9999,
+      blockTime: new Date(now.getTime() - 86400001),
+    },
+  ]);
+  const row = (await marketListings(local.db, { ...options, network }))
+    .tokens[0];
+  expect(row.volumeUsd24h).toBe(200);
+  expect(row.volumeUnpricedTrades).toBe(1);
+  expect(row.volumeComplete).toBe(false);
+});
+it("does not turn entirely unpriced trades into zero volume or complete history", async () => {
+  const result = await marketListings(local.db, {
+    ...options,
+    search: tokens[4].mint,
+  });
+  const row = result.tokens.find((token) => token.id === tokens[4].id)!;
+  expect(row.volumeUsd24h).toBeNull();
+  expect(row.volumeUnpricedTrades).toBe(1);
+  expect(row.volumeComplete).toBe(false);
+});
+
+it("does not mark a mixed-price subtotal complete even with fully indexed curve history", async () => {
+  await local.db.insert(tokenTrades).values({
+    tokenId: tokens[4].id, signature: "mixed-curve-priced", eventIndex: 0,
+    wallet: "fixture", side: "buy", baseAmount: "1", quoteAmount: "2",
+    priceQuote: "2", volumeUsd: 200, blockTime: new Date(now.getTime() - 1000),
+  });
+  const result = await marketListings(local.db, { ...options, search: tokens[4].mint });
+  const row = result.tokens.find((token) => token.id === tokens[4].id)!;
+  expect(row.volumeUsd24h).toBe(200);
+  expect(row.volumeUnpricedTrades).toBe(1);
+  expect(row.volumeComplete).toBe(false);
+});
