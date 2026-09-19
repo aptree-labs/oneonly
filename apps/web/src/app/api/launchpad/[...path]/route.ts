@@ -437,6 +437,7 @@ async function handle(request: Request, path: string[]) {
         );
       }
       return response({
+        wallet,
         balance: formatUnits(BigInt(balance), 9),
         quoteBalances: await Promise.all(
           quoteAssets()

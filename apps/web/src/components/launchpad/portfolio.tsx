@@ -1,10 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import Link from "next/link";
-import { Wallet, ArrowUpRight, ExternalLink } from "lucide-react";
+import { Wallet, ArrowUpRight, ExternalLink, LoaderCircle } from "lucide-react";
 import { api, useLaunchpad, number, type Intent } from "./provider";
 import { type Token } from "./explore";
+import { loadPortfolioForWallet } from "@/lib/portfolio-access";
+import { ApiError } from "@/lib/trade-submission";
 type Portfolio = {
+  wallet: string;
   balance: string;
   quoteBalances?: { symbol: string; mint: string; balance: string }[];
   holdings: Token[];
@@ -12,25 +16,73 @@ type Portfolio = {
   intents: (Intent & { kind: string; createdAt: string })[];
 };
 export function Portfolio() {
-  const app = useLaunchpad(),
-    [data, setData] = useState<Portfolio | null>(null),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  async function load() {
-    setBusy(true);
-    setError("");
-    try {
-      await app.authenticate();
-      setData(await api<Portfolio>("portfolio"));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const app = useLaunchpad();
+  const modal = useWalletModal();
+  const [state, setState] = useState<{
+    wallet: string | null;
+    data: Portfolio | null;
+    status: "loading" | "ready" | "signin" | "error";
+    error: string;
+  }>({ wallet: null, data: null, status: "loading", error: "" });
+  const request = useRef(0);
+  const activeWallet = useRef(app.wallet);
+  activeWallet.current = app.wallet;
+  const authenticate = useRef(app.authenticate);
+  authenticate.current = app.authenticate;
+  const load = useCallback(
+    async (signIn = false) => {
+      const wallet = app.wallet;
+      if (!wallet) return;
+      const id = ++request.current;
+      const current = () =>
+        request.current === id && activeWallet.current === wallet;
+      setState((previous) => ({
+        wallet,
+        data: previous.wallet === wallet ? previous.data : null,
+        status: "loading",
+        error: "",
+      }));
+      try {
+        const data = await loadPortfolioForWallet(
+          wallet,
+          () => api<{ wallet: string | null }>("session"),
+          () => api<Portfolio>("portfolio"),
+          signIn
+            ? () => (current() ? authenticate.current() : Promise.resolve(""))
+            : undefined,
+        );
+        if (current())
+          setState({
+            wallet,
+            data,
+            status: data ? "ready" : "signin",
+            error: "",
+          });
+      } catch (e) {
+        if (!current()) return;
+        const needsSignIn = e instanceof ApiError && e.status === 401;
+        setState((previous) => ({
+          ...previous,
+          data: needsSignIn ? null : previous.data,
+          status: needsSignIn ? "signin" : "error",
+          error: needsSignIn ? "" : (e as Error).message,
+        }));
+      }
+    },
+    [app.wallet],
+  );
   useEffect(() => {
-    setData(null);
-  }, [app.wallet]);
+    if (app.wallet) void load();
+    return () => {
+      request.current += 1;
+    };
+  }, [app.wallet, app.transactionRevision, load]);
+  const data = state.wallet === app.wallet ? state.data : null;
+  const busy =
+    !!app.wallet && (state.wallet !== app.wallet || state.status === "loading");
+  const error = state.wallet === app.wallet ? state.error : "";
+  const setError = (message: string) =>
+    setState((previous) => ({ ...previous, error: message }));
   async function resume(id: string) {
     try {
       app.review(await api<Intent>(`intent/${id}`));
@@ -55,22 +107,49 @@ export function Portfolio() {
         </p>
       )}
       {!data ? (
-        <section className="lp-empty lp-wallet-empty">
-          <Wallet size={32} />
-          <h2>Make yourself known.</h2>
-          <p>
-            Connect and sign a message to see your balances and activity.
-            <br />
-            The sign-in message cannot move your funds.
-          </p>
-          <button
-            className="lp-primary"
-            onClick={() => void load()}
-            disabled={busy}
-          >
-            {busy ? "Check your wallet…" : "Open your wallet"}
-            <ArrowUpRight size={17} />
-          </button>
+        <section className="lp-empty lp-wallet-empty" aria-busy={busy}>
+          {busy ? (
+            <LoaderCircle size={32} className="lp-spin" aria-hidden="true" />
+          ) : (
+            <Wallet size={32} />
+          )}
+          <h2>
+            {busy
+              ? "Loading your ones…"
+              : !app.wallet
+                ? "Connect your wallet"
+                : state.status === "signin"
+                  ? "Sign in to your wallet"
+                  : "Couldn’t load your wallet"}
+          </h2>
+          {busy ? (
+            <p role="status">Fetching your holdings and activity.</p>
+          ) : (
+            <>
+              <p>
+                {!app.wallet
+                  ? "See your holdings, launches, and activity."
+                  : state.status === "signin"
+                    ? "Confirm ownership with a sign-in message. No transaction is sent."
+                    : "Try loading your holdings again."}
+              </p>
+              <button
+                className="lp-primary"
+                onClick={() =>
+                  !app.wallet
+                    ? modal.setVisible(true)
+                    : void load(state.status === "signin")
+                }
+              >
+                {!app.wallet
+                  ? "Connect wallet"
+                  : state.status === "signin"
+                    ? "Sign in"
+                    : "Try again"}
+                <ArrowUpRight size={17} />
+              </button>
+            </>
+          )}
         </section>
       ) : (
         <>
