@@ -44,6 +44,8 @@ import {
   Sun,
   Moon,
   Building2,
+  BookOpen,
+  MessageCircle,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -53,6 +55,7 @@ const PurchaseShare = dynamic(
   () => import("./purchase-share").then((module) => module.PurchaseShare),
   { ssr: false },
 );
+import { supportUrl } from "@/lib/support";
 import { XAccountButton } from "./x-account-button";
 import { usePanelState } from "./use-panel-state";
 import { useTradeSounds } from "./use-trade-sounds";
@@ -406,6 +409,7 @@ function Shell({
     { href: "/app/create", label: "Launch a token", Icon: Rocket },
     { href: "/app/portfolio", label: "Your wallet", Icon: Wallet },
     { href: "/app/office", label: "Retard Office", Icon: Building2 },
+    { href: "/app/docs", label: "Docs", Icon: BookOpen },
   ];
   return (
     <Context.Provider
@@ -469,7 +473,9 @@ function Shell({
                 aria-label={label}
                 title={label}
                 aria-current={
-                  pathname === href || (href === "/app" && pathname === "/")
+                  pathname === href ||
+                  (href === "/app/docs" && pathname.startsWith("/app/docs/")) ||
+                  (href === "/app" && pathname === "/")
                     ? "page"
                     : undefined
                 }
@@ -478,6 +484,16 @@ function Shell({
                 <span className="lp-nav-label">{label}</span>
               </Link>
             ))}
+            <a
+              href={supportUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Telegram support"
+              title="Telegram support"
+            >
+              <MessageCircle size={19} />
+              <span className="lp-nav-label">Support</span>
+            </a>
           </nav>
         </aside>
         <div className="lp-workspace">
@@ -486,15 +502,17 @@ function Shell({
               {network === "mainnet-beta" ? "MAINNET" : "DEVNET"}
             </span>
             <span className="lp-top-title">
-              {pathname.includes("create")
-                ? "THE LAUNCH BAY"
-                : pathname.includes("portfolio")
-                  ? "YOUR CORNER"
-                  : pathname.includes("office")
-                    ? "RETARD OFFICE"
-                    : pathname.includes("token/")
-                      ? "THE MARKET"
-                      : "THE WASTELAND"}
+              {pathname.includes("/docs")
+                ? "THE FIELD GUIDE"
+                : pathname.includes("create")
+                  ? "THE LAUNCH BAY"
+                  : pathname.includes("portfolio")
+                    ? "YOUR CORNER"
+                    : pathname.includes("office")
+                      ? "RETARD OFFICE"
+                      : pathname.includes("token/")
+                        ? "THE MARKET"
+                        : "THE WASTELAND"}
             </span>
             <div className="lp-topbar-actions">
               <button
@@ -548,6 +566,12 @@ function Shell({
           </main>
           <footer className="lp-bottom">
             <span>ONE ONLY</span>
+            <div className="lp-footer-links">
+              <Link href="/app/docs">Docs</Link>
+              <a href={supportUrl} target="_blank" rel="noopener noreferrer">
+                Telegram support <ExternalLink size={12} />
+              </a>
+            </div>
             <a
               href="https://docs.meteora.ag/developer-guides/dbc"
               target="_blank"

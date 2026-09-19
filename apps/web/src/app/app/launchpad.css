@@ -3757,3 +3757,25 @@ body:has(.launchpad[data-theme="dark"])
   color: var(--lp-muted);
   font-size: 11px;
 }
+
+.lp-footer-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+@media (max-width: 600px) {
+  .lp-sidebar nav a {
+    flex: 1 1 0;
+    padding: 9px 3px;
+  }
+  .lp-sidebar .lp-nav-label {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.2;
+  }
+  .lp-bottom {
+    flex-wrap: wrap;
+    gap: 18px;
+  }
+}
