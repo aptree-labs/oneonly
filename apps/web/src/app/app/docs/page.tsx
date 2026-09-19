@@ -8,13 +8,13 @@ export default function DocsPage() {
       <header className="lp-docs-intro">
         <span className="lp-kicker">THE ONE ONLY FIELD GUIDE</span>
         <h1>
-          Find your people.
+          One ticker.
           <br />
-          <em>Know your token.</em>
+          <em>Less second-guessing.</em>
         </h1>
         <p>
-          A guide to the idea behind One Only—and the steps from an available
-          ticker to a live market.
+          You called the narrative. Finding its token should be clearer. Learn
+          why One Only exists, then find your way from ticker to live market.
         </p>
         <Link className="lp-docs-start" href="/app/docs/why-one-only">
           Start with why <ArrowRight size={19} />

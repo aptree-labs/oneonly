@@ -14,14 +14,15 @@ export const guides: Guide[] = [
   {
     slug: "why-one-only",
     title: "Why One Only",
-    description: "One ticker. A clearer place to find its community.",
+    description:
+      "Calling the narrative should not mean guessing between copies.",
     sections: [
       {
         id: "the-problem",
-        title: "A ticker shouldn’t be a guessing game",
+        title: "Right narrative. Which ticker?",
         paragraphs: [
-          "A story breaks, a meme catches on, and suddenly the same ticker appears on dozens of tokens. Attention splits. Buyers have to work out which contract everyone is talking about.",
-          "One Only gives each active ticker one place in its own registry. The idea is simple: make discovery clearer, so people can spend more time following a community and less time sorting through copies.",
+          "You spot the story early: a big game, a cultural moment, a meme everyone is starting to share. Then you search its ticker and find a crowd of identical-looking tokens. Recognizing the narrative is one decision. Picking the contract that people gather around becomes another.",
+          "One Only is being built to remove that second guessing game inside the platform. One active ticker claim gives people a shared place to discover the token, follow its market, and join its conversation. Attention does not have to split across competing copies of the same ticker on One Only.",
         ],
       },
       {
@@ -30,6 +31,14 @@ export const guides: Guide[] = [
         paragraphs: [
           "Ticker availability is shared across One Only. Changing the pairing asset does not create a second claim on the same active ticker. Symbols are normalized before availability is checked.",
           "This rule applies inside One Only. It does not stop someone minting a token with the same name elsewhere on Solana. The contract address is still the identifier to check before trading.",
+        ],
+      },
+      {
+        id: "pairing",
+        title: "The same ticker, more ways to participate",
+        paragraphs: [
+          "The choice of pairing asset should serve the community. One Only supports configured pairs across SOL, stablecoins, DeFi tokens, and tokenized stocks. The launch form shows which assets are currently available.",
+          "When trading, choose what you want to pay or receive and let the app look for a supported route. The pairing asset changes the market’s denomination; it does not create another claim on the ticker. A stock-token pair does not turn the launched token into shares of that company.",
         ],
       },
       {
@@ -46,6 +55,7 @@ export const guides: Guide[] = [
         paragraphs: [
           "A ticker can be released when every pool under it has less than $100 of daily trading volume for three complete UTC days, once the app has enough verified history to apply that rule.",
           "Releasing a ticker does not erase the old token, your balance, or its trading history. Always check the contract address when returning to a ticker that may have been claimed again.",
+          "Clearer discovery is the goal. A unique ticker does not guarantee demand, liquidity, or a profitable trade.",
         ],
       },
     ],
