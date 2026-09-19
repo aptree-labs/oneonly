@@ -1,8 +1,10 @@
+import { historyConnection, readHistoryReceipt } from "./history-rpc";
 import {
   getDatabase,
   graduatedIndexes,
   tokenTrades,
   eq,
+  and,
   type launchTokens,
 } from "@oneonly/db";
 import {
@@ -10,9 +12,101 @@ import {
   readEventReceipt,
   PublicKey,
   decodeTransactionEvents,
+  type EventReceipt,
 } from "@oneonly/protocol";
 import { formatUnits } from "@oneonly/core";
 import { historicalUsd } from "./price";
+
+/** Receipt ingestion is independent of historical cursors, so new trades are never held behind backfill. */
+export async function indexGraduatedReceipt(
+  token: typeof launchTokens.$inferSelect,
+  pool: string,
+  signature: string,
+  tx: EventReceipt,
+) {
+  if (
+    !tx.meta ||
+    tx.meta.err ||
+    !tx.blockTime ||
+    !tx.meta.logMessages ||
+    tx.meta.logMessages.some((log) => log.includes("Log truncated"))
+  )
+    throw new Error("Incomplete graduated transaction history");
+  const db = await getDatabase();
+  let creation: Date | null = null;
+  const events = decodeTransactionEvents(tx, "damm-v2");
+  let matched = false;
+  for (const [eventIndex, event] of events.entries()) {
+    const data = event.data;
+    if (data.pool?.toString() !== pool) continue;
+    if (event.name === "evtInitializePool") {
+      creation = new Date(tx.blockTime! * 1000);
+      continue;
+    }
+    if (event.name !== "evtSwap2") continue;
+    matched = true;
+    const sell = data.tradeDirection === 0,
+      result = data.swapResult;
+    const input = BigInt(result.includedFeeInputAmount.toString());
+    const output = BigInt(result.outputAmount.toString());
+    // Gross quote turnover includes quote-side fees, matching DBC accounting and conservative inactivity checks.
+    const base = sell ? input : output,
+      quote = sell
+        ? output +
+          BigInt(result.claimingFee.toString()) +
+          BigInt(result.compoundingFee.toString()) +
+          BigInt(result.protocolFee.toString()) +
+          BigInt(result.referralFee.toString())
+        : input;
+    if (base <= 0n || quote <= 0n)
+      throw new Error("Invalid graduated swap amounts");
+    const baseAmount = formatUnits(base, 6),
+      quoteAmount = formatUnits(
+        quote,
+        token.quoteDecimals ?? (token.quote === "SOL" ? 9 : 6),
+      );
+    const time = new Date(tx.blockTime! * 1000);
+    const keys = tx.transaction.message.getAccountKeys({
+      accountKeysFromLookups: tx.meta.loadedAddresses,
+    });
+    await db
+      .insert(tokenTrades)
+      .values({
+        tokenId: token.id,
+        signature,
+        eventIndex,
+        venue: "damm-v2",
+        wallet: keys.get(0)!.toBase58(),
+        side: sell ? "sell" : "buy",
+        baseAmount,
+        quoteAmount,
+        priceQuote: (Number(quoteAmount) / Number(baseAmount)).toString(),
+        volumeUsd: null,
+        blockTime: time,
+      })
+      .onConflictDoNothing();
+    // Native turnover must survive a temporary historical-price outage.
+    const reference = await historicalUsd(token.quote, time);
+    if (reference !== null)
+      await db
+        .update(tokenTrades)
+        .set({ volumeUsd: Number(quoteAmount) * reference })
+        .where(
+          and(
+            eq(tokenTrades.signature, signature),
+            eq(tokenTrades.venue, "damm-v2"),
+            eq(tokenTrades.eventIndex, eventIndex),
+          ),
+        );
+  }
+  // Unknown swaps cannot establish complete history. Keep tickers claimed until the decoder supports them.
+  if (
+    !matched &&
+    tx.meta.logMessages?.some((log) => /Instruction: Swap/.test(log))
+  )
+    throw new Error("Unrecognized graduated swap event");
+  return { creation, matched };
+}
 
 /** A separate cursor proves DAMM coverage back to its initialization, including migration transactions. */
 export async function indexGraduatedPool(
@@ -21,7 +115,7 @@ export async function indexGraduatedPool(
   deadline: number,
 ) {
   const db = await getDatabase(),
-    rpc = connection();
+    rpc = historyConnection();
   await db
     .insert(graduatedIndexes)
     .values({ tokenId: token.id, pool })
@@ -66,7 +160,7 @@ export async function indexGraduatedPool(
       lastProcessed = entry.signature;
       continue;
     }
-    const tx = await readEventReceipt(rpc, entry.signature);
+    const tx = await readHistoryReceipt(rpc, entry.signature);
     if (
       !tx?.meta ||
       !tx.blockTime ||
@@ -80,74 +174,13 @@ export async function indexGraduatedPool(
       lastProcessed = entry.signature;
       continue;
     }
-    const events = decodeTransactionEvents(tx, "damm-v2");
-    let matched = false;
-    for (const [eventIndex, event] of events.entries()) {
-      const data = event.data;
-      if (data.pool?.toString() !== pool) continue;
-      if (event.name === "evtInitializePool") {
-        creation = new Date(tx.blockTime * 1000);
-        continue;
-      }
-      if (event.name !== "evtSwap2") continue;
-      matched = true;
-      const sell = data.tradeDirection === 0,
-        result = data.swapResult;
-      const input = BigInt(result.includedFeeInputAmount.toString());
-      const output = BigInt(result.outputAmount.toString());
-      // Gross quote turnover includes quote-side fees, matching DBC accounting and conservative inactivity checks.
-      const base = sell ? input : output,
-        quote = sell
-          ? output +
-            BigInt(result.claimingFee.toString()) +
-            BigInt(result.compoundingFee.toString()) +
-            BigInt(result.protocolFee.toString()) +
-            BigInt(result.referralFee.toString())
-          : input;
-      if (base <= 0n || quote <= 0n)
-        throw new Error("Invalid graduated swap amounts");
-      const baseAmount = formatUnits(base, 6),
-        quoteAmount = formatUnits(
-          quote,
-          token.quoteDecimals ?? (token.quote === "SOL" ? 9 : 6),
-        );
-      const time = new Date(tx.blockTime * 1000),
-        reference = await historicalUsd(token.quote, time);
-      const volumeUsd =
-        reference === null ? null : Number(quoteAmount) * reference;
-      const keys = tx.transaction.message.getAccountKeys({
-        accountKeysFromLookups: tx.meta.loadedAddresses,
-      });
-      await db
-        .insert(tokenTrades)
-        .values({
-          tokenId: token.id,
-          signature: entry.signature,
-          eventIndex,
-          venue: "damm-v2",
-          wallet: keys.get(0)!.toBase58(),
-          side: sell ? "sell" : "buy",
-          baseAmount,
-          quoteAmount,
-          priceQuote: (Number(quoteAmount) / Number(baseAmount)).toString(),
-          volumeUsd,
-          blockTime: time,
-        })
-        .onConflictDoUpdate({
-          target: [
-            tokenTrades.signature,
-            tokenTrades.venue,
-            tokenTrades.eventIndex,
-          ],
-          set: { volumeUsd },
-        });
-    }
-    // Unknown swaps cannot establish complete history. Keep tickers claimed until the decoder supports them.
-    if (
-      !matched &&
-      tx.meta.logMessages?.some((log) => /Instruction: Swap/.test(log))
-    )
-      return { indexed: false, reason: "Unrecognized graduated swap event" };
+    const receipt = await indexGraduatedReceipt(
+      token,
+      pool,
+      entry.signature,
+      tx,
+    );
+    creation = receipt.creation ?? creation;
     lastProcessed = entry.signature;
     if (creation && !previous.cursor) break;
   }

@@ -83,6 +83,7 @@ it("counts released launches, excludes drafts, failed and other networks; readin
   expect(data.launches).toBe(2);
   expect(data.graduations).toBe(1);
   expect(data.trades).toBe(2);
+  expect(data.latestTradeAt).toBe(activatedAt.toISOString());
   expect(data.volumes[0].amount).toBe("5.0");
   expect(data.volumeUsd).toBe(250);
   expect(data.unpricedTrades).toBe(1);
@@ -92,6 +93,7 @@ it("counts released launches, excludes drafts, failed and other networks; readin
 it("keeps true empty data separate from incomplete history", async () => {
   const empty = await officeTotals(local.db, "empty-network", now);
   expect(empty.launches).toBe(0);
+  expect(empty.latestTradeAt).toBeNull();
   expect(empty.volumeUsd).toBe(0);
   expect(empty.volumeComplete).toBe(true);
   const complete = await officeTotals(local.db, "devnet", now);

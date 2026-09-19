@@ -14,17 +14,17 @@ export type EventReceipt = {
   transaction: { message: Pick<VersionedMessage, "getAccountKeys"> };
 };
 
-export function versionOneEventReceipt(
+export function jsonEventReceipt(
   raw: any,
   signature: string,
 ): EventReceipt {
   if (
-    raw?.version !== 1 ||
+    !["legacy", 0, 1].includes(raw?.version) ||
     raw.transaction?.signatures?.[0] !== signature ||
     !Array.isArray(raw.transaction?.message?.accountKeys) ||
     (raw.blockTime != null && !Number.isFinite(raw.blockTime))
   )
-    throw new Error("Invalid version-1 transaction receipt");
+    throw new Error("Invalid transaction receipt");
   const keys = raw.transaction.message.accountKeys.map(
     (key: string) => new PublicKey(key),
   );
@@ -41,6 +41,11 @@ export function versionOneEventReceipt(
     meta: raw.meta ? { ...raw.meta, loadedAddresses } : null,
     transaction: { message: { getAccountKeys: () => accounts } },
   };
+}
+
+export function versionOneEventReceipt(raw: any, signature: string): EventReceipt {
+  if (raw?.version !== 1) throw new Error("Invalid version-1 transaction receipt");
+  return jsonEventReceipt(raw, signature);
 }
 
 /** web3.js 1.98 rejects v1. Use documented JSON for history only, keeping signing unchanged. */

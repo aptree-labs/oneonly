@@ -30,6 +30,7 @@ export async function officeTotals(
       .where(launched),
     db
       .select({
+        latestTradeAt: sql<string | null>`max(${tokenTrades.blockTime})::text`,
         symbol: launchTokens.quote,
         mint: launchTokens.quoteMint,
         amount: sql<string>`sum(${tokenTrades.quoteAmount}::numeric)`,
@@ -62,6 +63,12 @@ export async function officeTotals(
   const trades = volumes.reduce((sum, row) => sum + row.trades, 0);
   return {
     asOf: now.toISOString(),
+    latestTradeAt: volumes.reduce<string | null>((latest, row) => {
+      const value = row.latestTradeAt
+        ? new Date(row.latestTradeAt).toISOString()
+        : null;
+      return value && (!latest || value > latest) ? value : latest;
+    }, null),
     network,
     launches: pools.length,
     graduations: pools.filter(({ snapshot }) => snapshot?.graduated).length,

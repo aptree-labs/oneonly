@@ -1,3 +1,4 @@
+import { historyConnection, readHistoryReceipt } from "./history-rpc";
 import {
   getDatabase,
   launchTokens,
@@ -34,7 +35,8 @@ import {
 } from "@oneonly/core";
 import { historicalUsd } from "./price";
 import { reconcile } from "./transactions";
-import { indexGraduatedPool } from "./graduated-indexer";
+import { claimIndexerLease } from "./indexer-lease";
+import { indexGraduatedPool, indexGraduatedReceipt } from "./graduated-indexer";
 type Token = typeof launchTokens.$inferSelect;
 export async function refreshSnapshot(token: Token) {
   const { virtual, config, state, address, readyToMigrate } = await tradingPool(
@@ -197,7 +199,13 @@ export function indexConfirmedTrade(tokenId: string, signature: string) {
       "confirmed",
     );
     if (!receipt) return; // The chart catch-up and scheduled scan retry RPC indexing lag.
-    await indexTradeReceipt(token, signature, receipt);
+    const [snapshot] = await db
+      .select()
+      .from(poolSnapshots)
+      .where(eq(poolSnapshots.tokenId, token.id));
+    if (snapshot?.dammPool)
+      await indexGraduatedReceipt(token, snapshot.dammPool, signature, receipt);
+    else await indexTradeReceipt(token, signature, receipt);
   })().finally(() => confirming.delete(key));
   confirming.set(key, work);
   return work;
@@ -207,8 +215,13 @@ export async function indexPool(
   token: Token,
   runDeadline = Date.now() + 35_000,
 ) {
+  if (!(await claimIndexerLease(`history-pool:${token.id}`, 55)))
+    return {
+      indexed: false,
+      reason: "Pool history is already being refreshed",
+    };
   const db = await getDatabase(),
-    rpc = connection();
+    rpc = historyConnection();
   const snapshot = await refreshSnapshot(token);
   if (!snapshot)
     return {
@@ -219,6 +232,23 @@ export async function indexPool(
     .update(poolSnapshots)
     .set({ lastIndexAttempt: new Date() })
     .where(eq(poolSnapshots.tokenId, token.id));
+  // Migration history must run even when the old curve is still being backfilled.
+  if (snapshot.dammPool) {
+    try {
+      await indexGraduatedPool(
+        token,
+        snapshot.dammPool,
+        Math.min(runDeadline, Date.now() + 12_000),
+      );
+    } catch {
+      /* Continue curve backfill; recent sweeps independently retry DAMM receipts. */
+    }
+    if (Date.now() >= runDeadline)
+      return {
+        indexed: false,
+        reason: "Graduated scan used this run; curve history will resume",
+      };
+  }
   const [previous] = await db
     .select()
     .from(poolSnapshots)
@@ -273,7 +303,7 @@ export async function indexPool(
       lastProcessed = entry.signature;
       continue;
     }
-    const transaction = await readEventReceipt(rpc, entry.signature);
+    const transaction = await readHistoryReceipt(rpc, entry.signature);
     if (
       !transaction?.meta ||
       !transaction.blockTime ||
@@ -308,8 +338,6 @@ export async function indexPool(
       indexedThrough: scanStartedAt,
     })
     .where(eq(poolSnapshots.tokenId, token.id));
-  if (snapshot.dammPool)
-    return indexGraduatedPool(token, snapshot.dammPool, runDeadline);
   return { indexed: true };
 }
 export async function releaseInactiveTickers(now = new Date()) {
@@ -411,7 +439,9 @@ export async function releaseInactiveTickers(now = new Date()) {
   }
   return released;
 }
-export async function runIndexer() {
+export async function runIndexer(deadline = Date.now() + 35_000) {
+  if (!(await claimIndexerLease("history", 55)))
+    return { results: [], released: 0, skipped: true };
   await assertNetwork();
   const db = await getDatabase();
   const pending = await db
@@ -424,18 +454,23 @@ export async function runIndexer() {
       ),
     )
     .limit(30);
-  for (const intent of pending) await reconcile(intent.id, intent.wallet);
+  for (const intent of pending) {
+    if (Date.now() >= deadline - 20_000) break;
+    await reconcile(intent.id, intent.wallet);
+  }
   const records = await db
     .select({ token: launchTokens })
     .from(launchTokens)
     .leftJoin(poolSnapshots, eq(poolSnapshots.tokenId, launchTokens.id))
     .where(
-      and(eq(launchTokens.network, NETWORK), eq(launchTokens.status, "active")),
+      and(
+        eq(launchTokens.network, NETWORK),
+        inArray(launchTokens.status, ["active", "released"]),
+      ),
     )
     .orderBy(sql`${poolSnapshots.lastIndexAttempt} asc nulls first`)
     .limit(30);
   const results = [];
-  const deadline = Date.now() + 35_000;
   // Completed scans can contain unknown prices. Retry a bounded sample so a
   // temporary provider outage does not leave recent volume permanently unknown.
   const missing = await db
@@ -450,7 +485,7 @@ export async function runIndexer() {
       ),
     )
     .orderBy(sql`random()`)
-    .limit(4);
+    .limit(12);
   for (const { trade, quote } of missing) {
     if (Date.now() > deadline - 15_000) break;
     const reference = await historicalUsd(quote, trade.blockTime);

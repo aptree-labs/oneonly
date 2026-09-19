@@ -1,3 +1,4 @@
+import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
@@ -246,4 +247,19 @@ it("USD candles use recorded execution values and omit missing prices", async ()
     (await marketCandles(local.db, tokens[4].id, "1m", undefined, "usd"))
       .candles,
   ).toEqual([]);
+});
+
+it("pins the official mainnet mint ahead of sorting before pagination", async () => {
+  const official = { ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: PLATFORM_TOKEN_MINT, pool: "official-pool", ticker: "ONEONLY", activatedAt: new Date("2025-01-01") };
+  const others = Array.from({ length: 25 }, (_, i) => ({ ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: `other-mainnet-${i}`, pool: `other-pool-${i}`, ticker: `OTHER${i}`, activatedAt: now }));
+  await local.db.insert(launchTokens).values([official, ...others]);
+  for (const sort of ["newest", "volume", "market-cap", "recent-buys"] as const) {
+    const first = await marketListings(local.db, { ...options, network: "mainnet-beta", sort });
+    const second = await marketListings(local.db, { ...options, network: "mainnet-beta", sort, page: 1 });
+    expect(first.tokens[0].id).toBe(official.id);
+    expect(first.total).toBe(26);
+    expect(second.tokens.some((t) => t.id === official.id)).toBe(false);
+  }
+  const search = await marketListings(local.db, { ...options, network: "mainnet-beta", search: "OTHER" });
+  expect(search.tokens.some((t) => t.id === official.id)).toBe(false);
 });

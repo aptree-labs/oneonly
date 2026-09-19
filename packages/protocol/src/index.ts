@@ -1,5 +1,6 @@
 export {
   readEventReceipt,
+  jsonEventReceipt,
   versionOneEventReceipt,
   type EventReceipt,
 } from "./event-receipt";

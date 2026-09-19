@@ -31,6 +31,10 @@ vi.mock("@oneonly/protocol", async (original) => ({
   connection: () => mock.rpc,
   tradingPool: async () => mock.market,
 }));
+vi.mock("./history-rpc", async () => ({
+  historyConnection: () => mock.rpc,
+  readHistoryReceipt: async (rpc: any, signature: string) => (await import("@oneonly/protocol")).readEventReceipt(rpc, signature),
+}));
 vi.mock("./price", () => ({ historicalUsd: mock.historical }));
 import {
   indexPool,

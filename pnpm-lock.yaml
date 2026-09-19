@@ -111,6 +111,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@oneonly/core':
+        specifier: workspace:*
+        version: link:../core
       '@electric-sql/pglite':
         specifier: ^0.3.14
         version: 0.3.16

@@ -17,6 +17,7 @@ vi.mock("@oneonly/protocol", () => ({
   USDC_MINTS: { "mainnet-beta": "usdc" },
 }));
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.resetModules();
   vi.clearAllMocks();
@@ -62,4 +63,38 @@ it("rejects stale Jupiter prices and falls back independently for SOL and USDC",
   const { prices } = await import("./price");
   expect(await prices()).toMatchObject({ SOL: 99, USDC: 0.999 });
   expect((await prices()).JUP).toBeUndefined();
+});
+
+it("coalesces completed-minute references across simultaneous swaps", async () => {
+  const { historicalUsd } = await import("./price");
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-19T20:30:00Z"));
+  const time = new Date("2026-09-19T20:20:10Z");
+  const fetcher = vi.fn(async () => new Response(JSON.stringify([
+    [Math.floor(time.getTime() / 60_000) * 60, 110, 115, 112, 113, 99],
+  ])));
+  vi.stubGlobal("fetch", fetcher);
+  expect(await Promise.all(Array.from({ length: 30 }, () => historicalUsd("SOL", time))))
+    .toEqual(Array(30).fill(115));
+  expect(await historicalUsd("SOL", new Date("2026-09-19T20:20:50Z"))).toBe(115);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it("retries missing references without using a current spot price", async () => {
+  const { historicalUsd } = await import("./price");
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-19T20:40:00Z"));
+  const time = new Date("2026-09-19T20:35:10Z");
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(new Response("unavailable", { status: 503 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify([
+      [Math.floor(time.getTime() / 60_000) * 60, 110, 116, 112, 113, 99],
+    ])));
+  vi.stubGlobal("fetch", fetcher);
+  expect(await historicalUsd("SOL", time)).toBeNull();
+  expect(await historicalUsd("SOL", time)).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  vi.setSystemTime(new Date("2026-09-19T20:40:16Z"));
+  expect(await historicalUsd("SOL", time)).toBe(116);
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

@@ -91,6 +91,7 @@ import { preparePoolConfig } from "@/lib/launchpad/setup";
 import { tradeAssets } from "@/lib/launchpad/trade-assets";
 import { tradePreview } from "@/lib/launchpad/trade-preview";
 import { saleShare } from "@/lib/launchpad/sale-share";
+import { refreshRecentTrades } from "@/lib/launchpad/recent-indexer";
 import { readOffice, readOfficeFees } from "@/lib/launchpad/office";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,6 +115,11 @@ async function handle(request: Request, path: string[]) {
       );
     }
     if (action === "office") {
+      after(async () => {
+        await refreshRecentTrades().catch(() =>
+          console.warn("Recent trade refresh unavailable"),
+        );
+      });
       const { pools: _pools, ...totals } = await readOffice();
       return response(totals);
     }
@@ -483,7 +489,10 @@ async function handle(request: Request, path: string[]) {
       )
         fail("Unauthorized", 401);
       try {
-        return response(await runIndexer());
+        const deadline = Date.now() + 50_000;
+        const recent = await refreshRecentTrades();
+        const history = await runIndexer(deadline);
+        return response({ ...history, recent });
       } finally {
         invalidateDiscovery();
       }

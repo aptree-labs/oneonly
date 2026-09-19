@@ -18,7 +18,7 @@ const policies: Record<string, Policy> = {
   },
   config: { fresh: 10, stale: 10, edge: 5, parameters: [] },
   "trade-assets": { fresh: 5, stale: 10, edge: 3, parameters: [] },
-  office: { fresh: 30, stale: 30, edge: 10, parameters: [] },
+  office: { fresh: 10, stale: 5, edge: 3, parameters: [] },
 };
 export function publicPolicy(request: Request, path: string[]) {
   if (request.method !== "GET") return null;

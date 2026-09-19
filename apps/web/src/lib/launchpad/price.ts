@@ -120,7 +120,42 @@ async function readPrices(): Promise<References> {
   return cached;
 }
 /** The candle high is deliberately conservative: uncertain valuation never frees a ticker. */
+const historicalCache = new Map<
+  string,
+  { value: number | null; expires: number }
+>();
+const historicalPending = new Map<string, Promise<number | null>>();
+/** Many swaps share the same completed minute; fetch its reference only once. */
 export async function historicalUsd(
+  symbol: string,
+  time: Date,
+): Promise<number | null> {
+  if (symbol !== "SOL" && symbol !== "USDC")
+    return historicalStockUsd(symbol, time);
+  const minute = Math.floor(time.getTime() / 60_000);
+  if (!Number.isFinite(minute)) return null;
+  const key = `${symbol}:${minute}`,
+    cached = historicalCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.value;
+  const pending = historicalPending.get(key);
+  if (pending) return pending;
+  const work = readHistoricalUsd(symbol, time)
+    .then((value) => {
+      historicalCache.delete(key);
+      historicalCache.set(key, {
+        value,
+        expires: Date.now() + (value === null ? 15_000 : 3_600_000),
+      });
+      if (historicalCache.size > 2048)
+        historicalCache.delete(historicalCache.keys().next().value!);
+      return value;
+    })
+    .finally(() => historicalPending.delete(key));
+  historicalPending.set(key, work);
+  return work;
+}
+
+async function readHistoricalUsd(
   symbol: string,
   time: Date,
 ): Promise<number | null> {

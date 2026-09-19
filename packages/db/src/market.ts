@@ -1,3 +1,4 @@
+import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
 import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
 import {
   launchTokens,
@@ -144,6 +145,7 @@ export async function marketListings(
       ),
     )
     .orderBy(
+      sql`case when ${launchTokens.network} = 'mainnet-beta' and ${launchTokens.mint} = ${PLATFORM_TOKEN_MINT} then 0 else 1 end`,
       ordering,
       sql`${marketCapUsd} desc nulls last`,
       desc(launchTokens.activatedAt),

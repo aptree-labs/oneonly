@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowUpRight, Building2, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { UsdValue } from "./usd-value";
@@ -16,43 +16,69 @@ export function Office() {
   const [feeLoading, setFeeLoading] = useState(true);
   const [error, setError] = useState("");
   const [feeError, setFeeError] = useState("");
-  const [revision, setRevision] = useState(0);
+  const refreshRef = useRef<() => void>(() => {});
   useEffect(() => {
+    let active = true,
+      totalsPending = false,
+      feesPending = false;
+    const loadTotals = () => {
+      if (totalsPending) return;
+      totalsPending = true;
+      setLoading(true);
+      setError("");
+      void api<Totals>("office")
+        .then((data) => {
+          if (active) setTotals(data);
+        })
+        .catch(() => {
+          if (active) setError("Totals couldn’t load. Try refreshing.");
+        })
+        .finally(() => {
+          totalsPending = false;
+          if (active) setLoading(false);
+        });
+    };
+    const loadFees = () => {
+      if (feesPending) return;
+      feesPending = true;
+      setFeeLoading(true);
+      setFeeError("");
+      void api<OfficeFees>("office-fees")
+        .then((data) => {
+          if (active) setFees(data);
+        })
+        .catch(() => {
+          if (active) setFeeError("Fee totals are temporarily unavailable.");
+        })
+        .finally(() => {
+          feesPending = false;
+          if (active) setFeeLoading(false);
+        });
+    };
+    const refresh = () => {
+      loadTotals();
+      loadFees();
+    };
+    refreshRef.current = refresh;
+    refresh();
     const timer = setInterval(() => {
-      if (document.visibilityState === "visible") setRevision((n) => n + 1);
+      if (document.visibilityState === "visible") loadTotals();
+    }, 15_000);
+    const feeTimer = setInterval(() => {
+      if (document.visibilityState === "visible") loadFees();
     }, 60_000);
-    return () => clearInterval(timer);
-  }, []);
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setFeeLoading(true);
-    setError("");
-    setFeeError("");
-    api<Totals>("office")
-      .then((data) => {
-        if (active) setTotals(data);
-      })
-      .catch(() => {
-        if (active) setError("Totals couldn’t load. Try refreshing.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    api<OfficeFees>("office-fees")
-      .then((data) => {
-        if (active) setFees(data);
-      })
-      .catch(() => {
-        if (active) setFeeError("Fee totals are temporarily unavailable.");
-      })
-      .finally(() => {
-        if (active) setFeeLoading(false);
-      });
+    const visible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
+      refreshRef.current = () => {};
+      clearInterval(timer);
+      clearInterval(feeTimer);
+      document.removeEventListener("visibilitychange", visible);
     };
-  }, [revision]);
+  }, []);
   const partialFees =
     !!fees &&
     (fees.checked < fees.pools ||
@@ -83,7 +109,7 @@ export function Office() {
         </div>
         <button
           className="lp-secondary"
-          onClick={() => setRevision((n) => n + 1)}
+          onClick={() => refreshRef.current()}
           disabled={loading || feeLoading}
           aria-label="Refresh office totals"
         >
@@ -237,6 +263,16 @@ export function Office() {
           The volume breakdown uses native, unscaled units.
         </p>
       </details>
+      {totals?.latestTradeAt && (
+        <p className="lp-office-updated">
+          Latest indexed trade{" "}
+          {new Date(totals.latestTradeAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </p>
+      )}
       {totals && (
         <p className="lp-office-updated">
           Updated{" "}
@@ -246,7 +282,7 @@ export function Office() {
           })}
           {loading || feeLoading
             ? " · Refreshing…"
-            : " · Totals refresh every minute"}
+            : " · Volume refreshes every 15 seconds"}
         </p>
       )}
     </section>
