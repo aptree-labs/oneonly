@@ -1649,6 +1649,7 @@
 
 /* Market discovery: search and ranking above the quote-asset filters. */
 .lp-market-controls {
+  margin-bottom: 24px;
   border: 1px solid var(--lp-border, #aeb89e);
   border-radius: 12px;
   background: var(--lp-surface, #e8e9d3);
