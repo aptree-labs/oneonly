@@ -1,6 +1,42 @@
 import type { Token } from "@/components/launchpad/explore";
-export type MarketResults = { tokens: Token[]; total: number; asOf?: string };
-type Entry = { value: MarketResults; expires: number };
+export type MarketResults = {
+  tokens: Token[];
+  total: number;
+  asOf?: string;
+  usdReferenceTime?: number | null;
+};
+/** Preserve source age across server, CDN and browser caches. */
+export function marketFreshUntil(
+  value: MarketResults,
+  receivedAt = Date.now(),
+) {
+  return Math.min(
+    snapshotTime(value, receivedAt) + 5_000,
+    referenceDeadline(value),
+  );
+}
+export function marketUsableUntil(
+  value: MarketResults,
+  receivedAt = Date.now(),
+) {
+  return Math.min(
+    snapshotTime(value, receivedAt) + 15_000,
+    referenceDeadline(value),
+  );
+}
+function snapshotTime(value: MarketResults, fallback: number) {
+  const time = value.asOf === undefined ? fallback : Date.parse(value.asOf);
+  return Number.isFinite(time) && time <= fallback ? time : 0;
+}
+function referenceDeadline(value: MarketResults) {
+  const time = value.usdReferenceTime;
+  return time == null
+    ? Infinity
+    : Number.isFinite(time) && time <= Date.now()
+      ? time + 30_000
+      : 0;
+}
+type Entry = { value: MarketResults; expires: number; usableUntil: number };
 const entries = new Map<string, Entry>();
 const pending = new Map<string, Promise<MarketResults>>();
 let generation = 0;
@@ -16,11 +52,15 @@ export function marketKey(params: URLSearchParams) {
 export function peekMarket(key: string) {
   const entry = entries.get(key);
   // Brief stale-while-refresh is useful; a hours-old dialog result is not.
-  return entry && entry.expires + 25_000 > Date.now() ? entry.value : undefined;
+  return entry && entry.usableUntil > Date.now() ? entry.value : undefined;
 }
 export function seedMarket(key: string, value: MarketResults) {
   entries.delete(key);
-  entries.set(key, { value, expires: Date.now() + 5_000 });
+  entries.set(key, {
+    value,
+    expires: marketFreshUntil(value),
+    usableUntil: marketUsableUntil(value),
+  });
   while (entries.size > 50) entries.delete(entries.keys().next().value!);
 }
 export function clearMarket() {

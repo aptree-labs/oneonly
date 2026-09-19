@@ -6,6 +6,7 @@ import {
   marketKey,
   peekMarket,
   seedMarket,
+  marketUsableUntil,
   type MarketResults,
 } from "@/lib/market-results";
 export function useMarketResults(
@@ -50,6 +51,10 @@ export function useMarketResults(
           setState((previous) => ({
             ...previous,
             key,
+            data:
+              previous.data && marketUsableUntil(previous.data) > Date.now()
+                ? previous.data
+                : undefined,
             error: (error as Error).message,
             refreshing: false,
           }));

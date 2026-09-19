@@ -1,3 +1,4 @@
+import { marketUsableUntil, type MarketResults } from "@/lib/market-results";
 import { publicCache } from "@/lib/cache/public-cache";
 import { publicPolicy, publicHeaders } from "@/lib/cache/public-policy";
 import { redisRateLimitsEnabled } from "@/lib/cache/redis";
@@ -610,6 +611,13 @@ async function route(
           throw new Error("Public cache rejected response");
         return result.json();
       });
+      // Layered cache reads cannot renew the age of listing data or USD references.
+      if (
+        path[0] === "tokens" &&
+        marketUsableUntil(data as MarketResults) <= Date.now()
+      ) {
+        return await handle(request, path);
+      }
       return Response.json(data, { headers: publicHeaders(policy.edge) });
     }
     return await handle(request, path);

@@ -40,7 +40,13 @@ export type Token = {
     updatedAt: string;
   } | null;
 };
-export function TokenCard({ token }: { token: Token }) {
+export function TokenCard({
+  token,
+  priority = false,
+}: {
+  token: Token;
+  priority?: boolean;
+}) {
   const app = useLaunchpad();
   const [copied, setCopied] = useState(false);
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,7 +79,7 @@ export function TokenCard({ token }: { token: Token }) {
         <img
           src={`/api/launchpad/image/${token.imageId}`}
           alt=""
-          loading="lazy"
+          loading={priority ? "eager" : "lazy"}
         />
         <span className="lp-stamp">
           {token.snapshot?.graduated ? "GRADUATED" : `${token.quote} PAIR`}
@@ -284,7 +290,7 @@ export function Explore({ initial }: { initial?: MarketResults }) {
           ))}
         </div>
       </section>
-      {error ? (
+      {error && !data ? (
         <div className="lp-empty">
           <h3>Couldn’t reach the registry.</h3>
           <p role="alert">{error}</p>
@@ -298,8 +304,8 @@ export function Explore({ initial }: { initial?: MarketResults }) {
         </div>
       ) : tokens.length ? (
         <div className="lp-token-grid">
-          {tokens.map((token) => (
-            <TokenCard key={token.id} token={token} />
+          {tokens.map((token, index) => (
+            <TokenCard key={token.id} token={token} priority={index < 4} />
           ))}
         </div>
       ) : (

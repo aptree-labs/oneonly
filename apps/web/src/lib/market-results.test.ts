@@ -4,6 +4,8 @@ import {
   loadMarket,
   marketKey,
   peekMarket,
+  seedMarket,
+  marketUsableUntil,
 } from "./market-results";
 afterEach(() => {
   clearMarket();
@@ -63,4 +65,45 @@ it("does not cache an outage as an empty search result", async () => {
   const key = marketKey(new URLSearchParams());
   await expect(loadMarket(key)).rejects.toThrow("couldn’t load");
   expect(peekMarket(key)).toBeUndefined();
+});
+
+it("does not restart the freshness clock when receiving a server or CDN snapshot", async () => {
+  vi.useFakeTimers();
+  const key = marketKey(new URLSearchParams());
+  const snapshot = {
+    tokens: [],
+    total: 1,
+    asOf: new Date(Date.now() - 6000).toISOString(),
+  };
+  seedMarket(key, snapshot);
+  expect(peekMarket(key)).toBe(snapshot);
+  const fetcher = vi.fn(async () =>
+    Response.json({ tokens: [], total: 2, asOf: new Date().toISOString() }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  expect((await loadMarket(key)).total).toBe(2);
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+it("expires snapshots at the earlier of their data and USD reference deadlines", () => {
+  vi.useFakeTimers();
+  const key = marketKey(new URLSearchParams());
+  seedMarket(key, {
+    tokens: [],
+    total: 1,
+    asOf: new Date().toISOString(),
+    usdReferenceTime: Date.now() - 29000,
+  });
+  expect(peekMarket(key)?.total).toBe(1);
+  vi.advanceTimersByTime(1001);
+  expect(peekMarket(key)).toBeUndefined();
+  const old = {
+    tokens: [],
+    total: 1,
+    asOf: new Date(Date.now() - 16000).toISOString(),
+  };
+  seedMarket(key, old);
+  expect(peekMarket(key)).toBeUndefined();
+  expect(marketUsableUntil({ ...old, asOf: "invalid" })).toBeLessThan(
+    Date.now(),
+  );
 });
