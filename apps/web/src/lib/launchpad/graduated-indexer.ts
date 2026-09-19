@@ -1,4 +1,5 @@
-import { historyConnection, readHistoryReceipt } from "./history-rpc";
+import { historyConnection } from "./history-rpc";
+import { scanHistory, HISTORY_PAGE_SIZE } from "./scan-history";
 import {
   getDatabase,
   graduatedIndexes,
@@ -130,7 +131,7 @@ export async function indexGraduatedPool(
     return { indexed: false, reason: "Finalized chain time unavailable" };
   const rows = await rpc.getSignaturesForAddress(
     new PublicKey(pool),
-    { before: previous.scanBefore ?? undefined, limit: 25 },
+    { before: previous.scanBefore ?? undefined, limit: HISTORY_PAGE_SIZE },
     "finalized",
   );
   const boundary = previous.cursor
@@ -151,42 +152,25 @@ export async function indexGraduatedPool(
         coverageStart: creation,
       })
       .where(eq(graduatedIndexes.tokenId, token.id));
-  for (const entry of entries) {
-    if (Date.now() >= deadline) {
+  const scan = await scanHistory({
+    rpc,
+    entries,
+    deadline,
+    cursor: lastProcessed,
+    visit: async (signature, tx) => {
+      const receipt = await indexGraduatedReceipt(token, pool, signature, tx);
+      if (receipt.creation) creation = receipt.creation;
+      return !!receipt.creation && !previous.cursor;
+    },
+    checkpoint: async (cursor) => {
+      lastProcessed = cursor;
       await checkpoint();
-      return { indexed: false, reason: "Graduated history scan checkpointed" };
-    }
-    if (entry.err) {
-      lastProcessed = entry.signature;
-      continue;
-    }
-    const tx = await readHistoryReceipt(rpc, entry.signature);
-    if (
-      !tx?.meta ||
-      !tx.blockTime ||
-      tx.meta.logMessages?.some((log) => log.includes("Log truncated"))
-    )
-      return {
-        indexed: false,
-        reason: "Incomplete graduated transaction history",
-      };
-    if (tx.meta.err) {
-      lastProcessed = entry.signature;
-      continue;
-    }
-    const receipt = await indexGraduatedReceipt(
-      token,
-      pool,
-      entry.signature,
-      tx,
-    );
-    creation = receipt.creation ?? creation;
-    lastProcessed = entry.signature;
-    if (creation && !previous.cursor) break;
-  }
+    },
+  });
+  if (!scan.complete) return { indexed: false, reason: scan.reason };
   const complete = boundary >= 0 || (!previous.cursor && !!creation);
   if (!complete) {
-    if (rows.length < 25)
+    if (rows.length < HISTORY_PAGE_SIZE)
       return {
         indexed: false,
         reason: "Graduated history boundary unavailable",

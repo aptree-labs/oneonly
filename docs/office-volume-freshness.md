@@ -98,3 +98,56 @@ Production check for `dpl_3QqHhqrShRdmZkpp2mz7CLGfnfGi`: ONEONLY returned
 `volumeComplete: false`. The first landing card rendered `$56.94K+`.
 Twelve market-query tests, eight discovery tests, TypeScript, and the production
 build passed.
+
+## Faster receipt backfill — 2026-09-19 UTC
+
+DBC and DAMM history pages now request up to 100 signatures instead of 25.
+A shared scanner processes three receipts concurrently, overlapping RPC,
+historical-price, and database waits. The history RPC's existing 350 ms pacing,
+provider cooldown, read-only fallback, and database leases are unchanged.
+DAMM history gets up to 20 seconds of the existing overall run budget instead
+of 12 seconds. This increases work possible per sweep without raising the
+underlying request rate limit or adding a paid service.
+
+Every group saves its last contiguous successful signature. A missing receipt,
+truncated log, RPC failure, or ingestion failure leaves the cursor before the
+failed transaction. Later successful receipts may already be stored, but replay
+uses the existing unique receipt keys; coverage is never certified across a gap.
+A short DBC page with an unavailable historical boundary can now contribute its
+valid trades without incorrectly declaring history complete. New finalized
+trades continue using the independent recent-trade sweep.
+
+The new scanner tests cover three-way concurrency, ordered checkpoints,
+mid-page failure, deadline stops, truncated logs, ingestion failure, and the
+initialization boundary. Together with existing DBC/DAMM replay, v1 receipt,
+lease, RPC fallback, and price tests, 23 focused tests pass. The concurrency test
+completes nine simulated 100 ms reads in 300 ms rather than 900 ms; this is not
+a claim of a threefold production speedup, where RPC pacing and source latency
+still apply.
+
+Cross-check: Meteora's canonical DAMM pool API reported about $117,169 over 24h
+for ONEONLY at investigation time. This is graduated-pool data; it is not
+substituted for our receipts or added to already-indexed DAMM volume. Phantom's
+$149.9K screenshot may also include curve trading or a different observation
+window. Its exact aggregation scope has not been verified.
+Source: https://damm-v2.datapi.meteora.ag/pools/6fVxZPKh7rScX2H9kDH2rVXSuzXL1bq2d3Mbpo82Sq1d
+
+
+The first faster-worker run exposed a persistent receipt gap at signature
+`5nnyrU5nAdidWGXnPSu2ts3uNTLECR8hwERjrBw7j9evSA9W2riT9pB7Lmc7u5y836NkKQXsPxyWRmjrZqUcggJ`.
+The configured provider returned an incomplete receipt; the public finalized RPC
+returned a complete successful transaction with a decoded swap for the exact
+ONEONLY DAMM pool. History reads now retry missing or truncated receipts using
+the public endpoint before leaving the scan paused. Both sources must still
+pass the same receipt validation; no gap is skipped. A regression fixture uses
+the real public receipt, with a simulated truncated primary response. Public
+fallback remains rate limited and is not a replacement for dedicated capacity.
+
+
+Production verification: `dpl_2xxc6SN5JfosX85y77DxY4k4rEyU` recovered the exact
+blocked signature on its 22:04 UTC cron run and reported `Graduated history
+continuing next run`, proving the page completed beyond the former barrier.
+ONEONLY's priced 24h subtotal advanced from $68,458.75 to $70,368.20; Office
+reported 2,107 trades and $158,424.52 at 22:04:52 UTC. These remain incomplete
+backfill totals, not a claim of parity with Phantom. All 23 focused tests,
+TypeScript, and the production build passed. No paid plan was enabled.

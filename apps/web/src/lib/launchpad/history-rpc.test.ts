@@ -24,3 +24,28 @@ it("uses a read-only fallback after throttling and avoids retrying the throttled
   await expect(historyFetch("https://example.invalid", { body: JSON.stringify({ method: "sendTransaction" }) })).rejects.toThrow("read-only");
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
+
+
+it("recovers an incomplete provider receipt using the full finalized public receipt", async () => {
+  const { default: full } = await import("../../../../../packages/protocol/src/fixtures/mainnet-damm-backfill.json");
+  const partial = structuredClone(full.receipt);
+  partial.meta.logMessages = ["Log truncated"];
+  const fetcher = vi.fn()
+    .mockResolvedValueOnce(Response.json({ result: partial }))
+    .mockResolvedValueOnce(Response.json({ result: full.receipt }));
+  vi.stubGlobal("fetch", fetcher);
+  const { readHistoryReceipt } = await import("./history-rpc");
+  const receipt = await readHistoryReceipt({ rpcEndpoint: "https://example.invalid" }, full.signature);
+  const { decodeTransactionEvents } = await import("@oneonly/protocol");
+  const swaps = decodeTransactionEvents(receipt!, "damm-v2").filter(event => event.name === "evtSwap2" && event.data.pool.toString() === "6fVxZPKh7rScX2H9kDH2rVXSuzXL1bq2d3Mbpo82Sq1d");
+  expect(swaps).toHaveLength(1);
+  expect(fetcher.mock.calls.map(([url]) => url)).toEqual(["https://example.invalid", publicRpc(NETWORK)]);
+});
+
+it("does not turn incomplete receipts from both providers into complete history", async () => {
+  const fetcher = vi.fn().mockImplementation(async () => Response.json({ result: null }));
+  vi.stubGlobal("fetch", fetcher);
+  const { readHistoryReceipt } = await import("./history-rpc");
+  expect(await readHistoryReceipt({ rpcEndpoint: "https://example.invalid" }, fixture.signature)).toBeNull();
+  expect(fetcher).toHaveBeenCalledTimes(2);
+});

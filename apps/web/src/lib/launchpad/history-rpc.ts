@@ -44,15 +44,35 @@ export async function readHistoryReceipt(
   rpc: Pick<Connection, "rpcEndpoint">,
   signature: string,
 ): Promise<EventReceipt | null> {
-  const response = await historyFetch(rpc.rpcEndpoint, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTransaction", params: [signature, {
-      encoding: "json", commitment: "finalized", maxSupportedTransactionVersion: 1,
-    }] }),
-  });
-  if (!response.ok) throw new Error(`History RPC returned ${response.status}`);
-  const data = await response.json();
-  if (data.error) throw new Error(`History receipt unavailable (${data.error.code})`);
-  return data.result === null ? null : jsonEventReceipt(data.result, signature);
+  const read = async (endpoint: string) => {
+    const response = await historyFetch(endpoint, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getTransaction", params: [signature, {
+        encoding: "json", commitment: "finalized", maxSupportedTransactionVersion: 1,
+      }] }),
+    });
+    if (!response.ok) throw new Error(`History RPC returned ${response.status}`);
+    const data = await response.json();
+    if (data.error) throw new Error(`History receipt unavailable (${data.error.code})`);
+    return data.result === null ? null : jsonEventReceipt(data.result, signature);
+  };
+  const receipt = await read(rpc.rpcEndpoint);
+  const complete = (value: EventReceipt | null) =>
+    !!value?.meta && !!value.blockTime && (
+      !!value.meta.err || (
+        !!value.meta.logMessages &&
+        !value.meta.logMessages.some((log) => log.includes("Log truncated"))
+      )
+    );
+  // Some providers retain an incomplete receipt indefinitely. Retry the exact
+  // finalized signature elsewhere; never advance history by skipping it.
+  if (!complete(receipt) && rpc.rpcEndpoint !== publicRpc(NETWORK)) {
+    const fallback = await read(publicRpc(NETWORK));
+    if (complete(fallback)) {
+      console.info("history-receipt-recovered", { signature });
+      return fallback;
+    }
+  }
+  return receipt;
 }

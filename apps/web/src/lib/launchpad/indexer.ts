@@ -1,4 +1,5 @@
-import { historyConnection, readHistoryReceipt } from "./history-rpc";
+import { historyConnection } from "./history-rpc";
+import { scanHistory, HISTORY_PAGE_SIZE } from "./scan-history";
 import {
   getDatabase,
   launchTokens,
@@ -235,11 +236,12 @@ export async function indexPool(
   // Migration history must run even when the old curve is still being backfilled.
   if (snapshot.dammPool) {
     try {
-      await indexGraduatedPool(
+      const graduated = await indexGraduatedPool(
         token,
         snapshot.dammPool,
-        Math.min(runDeadline, Date.now() + 12_000),
+        Math.min(runDeadline, Date.now() + 20_000),
       );
+      console.info("graduated-history", { token: token.id, ...graduated });
     } catch {
       /* Continue curve backfill; recent sweeps independently retry DAMM receipts. */
     }
@@ -260,7 +262,7 @@ export async function indexPool(
   // Resume one history page per run. Only a fully completed scan establishes coverage.
   const rows = await rpc.getSignaturesForAddress(
     new PublicKey(token.pool),
-    { before: previous.scanBefore ?? undefined, limit: 25 },
+    { before: previous.scanBefore ?? undefined, limit: HISTORY_PAGE_SIZE },
     "finalized",
   );
   const boundary = previous.cursor
@@ -277,11 +279,6 @@ export async function indexPool(
         : rows.length;
   const signatures = rows.slice(0, stop);
   const complete = boundary >= 0 || launchBoundary >= 0;
-  if (!complete && rows.length < 25)
-    return {
-      indexed: false,
-      reason: "History boundary is unavailable; ticker remains claimed.",
-    };
   const scanHead = previous.scanHead ?? rows[0]?.signature ?? previous.cursor;
   const scanStartedAt = previous.scanStartedAt ?? new Date(rootTime * 1000);
   let lastProcessed = previous.scanBefore;
@@ -291,38 +288,28 @@ export async function indexPool(
       .set({ scanHead, scanStartedAt, scanBefore: lastProcessed })
       .where(eq(poolSnapshots.tokenId, token.id));
   const deadline = Math.min(runDeadline, Date.now() + 25_000);
-  for (const entry of signatures) {
-    if (Date.now() > deadline) {
+  const scan = await scanHistory({
+    rpc,
+    entries: signatures,
+    deadline,
+    cursor: lastProcessed,
+    visit: async (signature, transaction) => {
+      await indexTradeReceipt(token, signature, transaction);
+    },
+    checkpoint: async (cursor) => {
+      lastProcessed = cursor;
       await checkpoint();
-      return {
-        indexed: false,
-        reason: "History scan checkpointed; continuing next run.",
-      };
-    }
-    if (entry.err) {
-      lastProcessed = entry.signature;
-      continue;
-    }
-    const transaction = await readHistoryReceipt(rpc, entry.signature);
-    if (
-      !transaction?.meta ||
-      !transaction.blockTime ||
-      !transaction.meta.logMessages ||
-      transaction.meta.logMessages.some((log) => log.includes("Log truncated"))
-    )
-      return { indexed: false, reason: "Incomplete transaction history" };
-    if (transaction.meta.err) {
-      lastProcessed = entry.signature;
-      continue;
-    }
-    await indexTradeReceipt(token, entry.signature, transaction);
-    lastProcessed = entry.signature;
-  }
+    },
+  });
+  if (!scan.complete) return { indexed: false, reason: scan.reason };
   if (!complete) {
     await checkpoint();
     return {
       indexed: false,
-      reason: "History page indexed; continuing next run.",
+      reason:
+        rows.length < HISTORY_PAGE_SIZE
+          ? "History boundary is unavailable; ticker remains claimed."
+          : "History page indexed; continuing next run.",
     };
   }
   // Advance only after every transaction was fetched and parsed successfully.
