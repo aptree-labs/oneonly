@@ -1,0 +1,1 @@
+{"name":"@oneonly/core","private":true,"type":"module","exports":"./src/index.ts","scripts":{"typecheck":"tsc --noEmit"},"dependencies":{"effect":"^3.19.15"}}

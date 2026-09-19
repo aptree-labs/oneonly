@@ -1,0 +1,31 @@
+{
+  "name": "oneonly",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "dev": "pnpm --filter @oneonly/web dev",
+    "build": "pnpm --filter @oneonly/web build",
+    "start": "pnpm --filter @oneonly/web start",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "assets": "node scripts/optimize-assets.mjs",
+    "db:generate": "pnpm --filter @oneonly/db generate",
+    "db:migrate": "pnpm --filter @oneonly/db migrate",
+    "format": "prettier --write apps/web/src apps/web/next.config.ts packages/*/src scripts tests *.ts *.json *.yaml README.md",
+    "format:check": "prettier --check apps/web/src apps/web/next.config.ts packages/*/src scripts tests *.ts *.json *.yaml README.md",
+    "assets:brand": "node scripts/generate-brand-assets.mjs",
+    "assets:signup": "node scripts/prepare-signup-assets.mjs",
+    "check:launch": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/check-launch-readiness.ts",
+    "test:graduation": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/smoke-graduation-devnet.ts",
+    "test:indexer": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/smoke-indexer-devnet.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^22.0.0",
+    "prettier": "^3.6.2",
+    "sharp": "^0.35.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

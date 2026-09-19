@@ -1,0 +1,1 @@
+{"name":"@oneonly/db","private":true,"type":"module","exports":"./src/index.ts","scripts":{"typecheck":"tsc --noEmit","generate":"drizzle-kit generate","migrate":"tsx src/migrate.ts"},"dependencies":{"@electric-sql/pglite":"^0.3.14","drizzle-orm":"^0.45.1","postgres":"^3.4.8"},"devDependencies":{"drizzle-kit":"^0.31.9","tsx":"^4.21.0"}}

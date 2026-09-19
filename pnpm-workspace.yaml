@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+onlyBuiltDependencies:
+  - sharp
+  - esbuild
+# rpc-websockets currently requires uuid from CommonJS; uuid >=12 is ESM-only.
+overrides:
+  rpc-websockets>uuid: 11.1.1

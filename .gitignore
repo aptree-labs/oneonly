@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.data/
+.env*
+!.env.example
+playwright-report/
+test-results/
+*.tsbuildinfo
+.DS_Store
+
+.vercel/
+.vercel
+
+# Local agent tooling and account state
+.agents/
+.codex/
+skills-lock.json

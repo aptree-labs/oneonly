@@ -1,0 +1,1 @@
+ALTER TABLE "launch_tokens" ADD COLUMN "project_links" jsonb;

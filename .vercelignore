@@ -1,0 +1,9 @@
+.git
+assets
+bible.md
+node_modules
+**/.data
+**/.next
+**/.env*
+playwright-report
+test-results

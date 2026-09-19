@@ -1,0 +1,1 @@
+ALTER TABLE "pool_snapshots" ADD COLUMN "last_index_attempt" timestamp with time zone;

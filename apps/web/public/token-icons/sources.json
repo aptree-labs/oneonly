@@ -1,0 +1,11 @@
+{
+  "SOL": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+  "USDC": "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+  "JUP": "https://static.jup.ag/jup/icon.png",
+  "MET": "https://ir.meteora.ag/assets/met_logo.webp",
+  "SPYX": "https://xstocks-metadata.backed.fi/logos/tokens/SPYx.png",
+  "QQQX": "https://xstocks-metadata.backed.fi/logos/tokens/QQQx.png",
+  "NVDAX": "https://xstocks-metadata.backed.fi/logos/tokens/NVDAx.png",
+  "TSLAX": "https://xstocks-metadata.backed.fi/logos/tokens/TSLAx.png",
+  "CRCLX": "https://xstocks-metadata.backed.fi/logos/tokens/CRCLx.png"
+}
