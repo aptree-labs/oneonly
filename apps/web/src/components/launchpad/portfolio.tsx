@@ -102,38 +102,6 @@ export function Portfolio() {
             </div>
           </section>
           <section className="lp-panel lp-trades">
-            <h2>Quote assets</h2>
-            <div className="lp-table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Asset</th>
-                    <th>Available</th>
-                    <th>Mint</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(data.quoteBalances ?? []).map((asset) => (
-                    <tr key={asset.symbol}>
-                      <td>{asset.symbol}</td>
-                      <td>{number(asset.balance)}</td>
-                      <td>
-                        <a
-                          className="lp-text-link"
-                          href={app.explorer("address", asset.mint)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          View mint <ExternalLink size={13} />
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <section className="lp-panel lp-trades">
             <h2>Your holdings</h2>
             <div className="lp-table-scroll">
               <table>
@@ -175,6 +143,38 @@ export function Portfolio() {
                   <Link href="/app">Explore tokens ↗</Link>
                 </p>
               )}
+            </div>
+          </section>
+          <section className="lp-panel lp-trades">
+            <h2>Quote assets</h2>
+            <div className="lp-table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Asset</th>
+                    <th>Available</th>
+                    <th>Mint</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.quoteBalances ?? []).map((asset) => (
+                    <tr key={asset.symbol}>
+                      <td>{asset.symbol}</td>
+                      <td>{number(asset.balance)}</td>
+                      <td>
+                        <a
+                          className="lp-text-link"
+                          href={app.explorer("address", asset.mint)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View mint <ExternalLink size={13} />
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </section>
           <section className="lp-panel lp-trades">
