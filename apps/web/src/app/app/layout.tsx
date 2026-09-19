@@ -5,9 +5,9 @@ import { LaunchpadProvider } from "@/components/launchpad/provider";
 import "./launchpad.css";
 export const metadata: Metadata = {
   title: "Explore",
-  metadataBase: new URL("https://app.oneonly.lol"),
-  alternates: { canonical: "https://app.oneonly.lol" },
-  robots: { index: false, follow: false },
+  metadataBase: new URL("https://oneonly.lol"),
+  alternates: { canonical: "https://oneonly.lol" },
+  robots: { index: true, follow: true },
   description:
     "Discover, launch and trade tokens on One Only. Powered by Meteora on Solana.",
   twitter: {
@@ -15,19 +15,19 @@ export const metadata: Metadata = {
     title: "One Only — Launch & trade",
     description:
       "Discover, launch and trade tokens on One Only. Powered by Meteora on Solana.",
-    images: ["https://app.oneonly.lol/brand/oneonly-app-social-v2.jpg"],
+    images: ["https://oneonly.lol/brand/oneonly-app-social-v2.jpg"],
   },
   openGraph: {
     images: [
       {
-        url: "https://app.oneonly.lol/brand/oneonly-app-social-v2.jpg",
+        url: "https://oneonly.lol/brand/oneonly-app-social-v2.jpg",
         width: 1200,
         height: 630,
         alt: "One Only — launch and trade",
       },
     ],
     title: "One Only — Launch & trade",
-    url: "https://app.oneonly.lol",
+    url: "https://oneonly.lol",
     description:
       "Discover, launch and trade tokens on One Only. Powered by Meteora on Solana.",
   },

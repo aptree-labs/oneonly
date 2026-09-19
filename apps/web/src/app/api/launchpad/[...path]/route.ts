@@ -34,6 +34,8 @@ import {
 } from "@oneonly/db";
 import {
   normalizeTicker,
+  isReservedPlatformTicker,
+  PLATFORM_TOKEN_ID,
   LaunchError,
   formatUnits,
   formatScaledUnits,
@@ -186,6 +188,13 @@ async function handle(request: Request, path: string[]) {
       const ticker = normalizeTicker(
         new URL(request.url).searchParams.get("value") ?? "",
       );
+      if (isReservedPlatformTicker(ticker))
+        return response({
+          ticker,
+          available: false,
+          reserved: true,
+          tokenId: NETWORK === "mainnet-beta" ? PLATFORM_TOKEN_ID : undefined,
+        });
       const [row] = await db
         .select()
         .from(tickerClaims)

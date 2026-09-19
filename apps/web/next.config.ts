@@ -15,6 +15,27 @@ const config: NextConfig = {
     "@meteora-ag/dynamic-bonding-curve-sdk",
     "@coral-xyz/anchor",
   ],
+  async rewrites() {
+    return {
+      // Keep the existing X app credentials and registered callback unchanged.
+      beforeFiles:
+        process.env.ONEONLY_SURFACE === "app"
+          ? [
+              {
+                source: "/api/auth/x",
+                destination: "https://oneonly-kappa.vercel.app/api/auth/x",
+              },
+              {
+                source: "/api/auth/x/:path*",
+                destination:
+                  "https://oneonly-kappa.vercel.app/api/auth/x/:path*",
+              },
+            ]
+          : [],
+      afterFiles: [],
+      fallback: [],
+    };
+  },
   async headers() {
     return [
       {

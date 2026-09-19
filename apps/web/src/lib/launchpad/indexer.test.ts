@@ -5,6 +5,8 @@ import {
   launchTokens,
   tokenTrades,
   poolSnapshots,
+  tickerClaims,
+  eq,
 } from "@oneonly/db";
 import { MessageV0, PublicKey, VersionedMessage } from "@solana/web3.js";
 import {
@@ -30,7 +32,11 @@ vi.mock("@oneonly/protocol", async (original) => ({
   tradingPool: async () => mock.market,
 }));
 vi.mock("./price", () => ({ historicalUsd: mock.historical }));
-import { indexPool, indexTradeReceipt } from "./indexer";
+import {
+  indexPool,
+  indexTradeReceipt,
+  releaseInactiveTickers,
+} from "./indexer";
 beforeAll(async () => {
   local = await createLocalDatabase();
 });
@@ -221,4 +227,51 @@ it("continues a pool scan past version-1 trades and reaches the launch boundary"
   } finally {
     vi.unstubAllGlobals();
   }
+});
+
+it("keeps the platform ticker permanently reserved while releasing ordinary inactive tickers", async () => {
+  const now = new Date("2026-09-19T12:00:00Z");
+  const createdAt = new Date("2026-09-01T00:00:00Z");
+  for (const ticker of ["ONEONLY", "QUIETCOIN"]) {
+    const id = randomUUID();
+    await local.db.insert(launchTokens).values({
+      id,
+      network: "devnet",
+      ticker,
+      name: ticker,
+      description: "",
+      imageId: randomUUID(),
+      creator: PublicKey.default.toBase58(),
+      quote: "SOL",
+      quoteDecimals: 9,
+      mint: randomUUID(),
+      pool: randomUUID(),
+      config: randomUUID(),
+      status: "active",
+      createdAt,
+      activatedAt: createdAt,
+    });
+    await local.db
+      .insert(tickerClaims)
+      .values({ network: "devnet", ticker, tokenId: id });
+    await local.db.insert(poolSnapshots).values({
+      tokenId: id,
+      priceQuote: "0.01",
+      marketCapQuote: "100",
+      quoteReserve: "0",
+      progress: 0,
+      creatorQuoteFee: "0",
+      coverageStart: createdAt,
+      indexedThrough: now,
+    });
+  }
+  expect(await releaseInactiveTickers(now)).toBe(1);
+  const claims = await local.db.select().from(tickerClaims);
+  expect(claims.some((claim) => claim.ticker === "ONEONLY")).toBe(true);
+  expect(claims.some((claim) => claim.ticker === "QUIETCOIN")).toBe(false);
+  const [official] = await local.db
+    .select()
+    .from(launchTokens)
+    .where(eq(launchTokens.ticker, "ONEONLY"));
+  expect(official.status).toBe("active");
 });

@@ -1,4 +1,5 @@
 "use client";
+import { PlatformBadge } from "./platform-token";
 import { useEffect, useState, type FormEvent } from "react";
 import { ArrowDownUp, LoaderCircle, RefreshCw } from "lucide-react";
 import {
@@ -200,7 +201,9 @@ export function TradePanel({ token }: { token: Token }) {
       <div className="lp-swap-heading">
         <img src={`/api/launchpad/image/${token.imageId}`} alt="" />
         <div>
-          <strong>{token.name}</strong>
+          <strong>
+            {token.name} <PlatformBadge mint={token.mint} />
+          </strong>
           <span>${token.ticker}</span>
         </div>
       </div>

@@ -3780,3 +3780,70 @@ body:has(.launchpad[data-theme="dark"])
     gap: 18px;
   }
 }
+
+/* The gold mark is reserved for the exact official platform mint. */
+.lp-platform-badge {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+  color: #33270e;
+  fill: #e7bc55;
+  stroke-width: 2;
+}
+.lp-token-heading h1 > .lp-platform-badge {
+  width: 0.65em;
+  height: 0.65em;
+}
+.lp-platform-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 180px;
+  margin-bottom: 28px;
+  padding: 28px 36px;
+  border: 1px solid #a98c49;
+  border-radius: 12px;
+  color: #263021;
+  background: #c9c9a7 url("/scene/background-1600.webp") center 42% / cover;
+  overflow: hidden;
+}
+.lp-platform-banner > div {
+  padding: 16px 22px;
+  border-radius: 6px;
+  background: #e5e7cbef;
+}
+.lp-platform-banner .lp-kicker {
+  color: #4d5638;
+}
+.lp-platform-banner h2 {
+  margin: 8px 0;
+  font-size: clamp(28px, 4vw, 48px);
+  text-align: left;
+}
+.lp-platform-banner p {
+  margin: 0;
+  font-weight: 600;
+}
+.lp-platform-banner > img {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+}
+@media (max-width: 600px) {
+  .lp-platform-banner {
+    min-height: 150px;
+    padding: 16px;
+    gap: 12px;
+  }
+  .lp-platform-banner > div {
+    padding: 12px;
+  }
+  .lp-platform-banner .lp-kicker {
+    font-size: 9px;
+  }
+  .lp-platform-banner > img {
+    width: 64px;
+    height: 64px;
+  }
+}

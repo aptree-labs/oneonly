@@ -11,8 +11,8 @@ export async function generateMetadata({
     const token = await tokenRecord(id);
     const title = `${token.name} ($${token.ticker})`,
       description = token.description.slice(0, 180);
-    const url = `https://app.oneonly.lol/app/token/${token.id}`;
-    const image = `https://app.oneonly.lol/api/launchpad/image/${token.imageId}`;
+    const url = `https://oneonly.lol/app/token/${token.id}`;
+    const image = `https://oneonly.lol/api/launchpad/image/${token.imageId}`;
     return {
       title,
       description,
@@ -34,7 +34,7 @@ export async function generateMetadata({
   } catch {
     return {
       title: "Token",
-      alternates: { canonical: `https://app.oneonly.lol/app/token/${id}` },
+      alternates: { canonical: `https://oneonly.lol/app/token/${id}` },
     };
   }
 }

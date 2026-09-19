@@ -1,5 +1,5 @@
 export type TradeShareSide = "buy" | "sell";
-export const purchaseShareOrigin = "https://app.oneonly.lol";
+export const purchaseShareOrigin = "https://oneonly.lol";
 export const purchaseSharePath = (id: string) =>
   `/app/share/${encodeURIComponent(id)}`;
 export const tradeShareUrl = (

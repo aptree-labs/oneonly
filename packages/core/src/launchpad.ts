@@ -1,4 +1,5 @@
 import { Data, Effect, Schema } from "effect";
+import { isReservedPlatformTicker } from "./platform-token";
 export const TOKEN_SUPPLY = 1_000_000_000;
 export const TOKEN_DECIMALS = 6;
 export const DAY = 86_400_000;
@@ -203,6 +204,12 @@ export const validateLaunch = (input: unknown) =>
           const ticker = normalizeTicker(data.ticker),
             name = data.name.trim(),
             description = (data.description ?? "").trim();
+          if (isReservedPlatformTicker(ticker))
+            throw new LaunchError({
+              message:
+                "ONEONLY and similar tickers are reserved for the official One Only token.",
+              status: 400,
+            });
           if (name.length < 1 || new TextEncoder().encode(name).length > 32)
             throw new LaunchError({
               message: "Token names must be 1–32 UTF-8 bytes.",

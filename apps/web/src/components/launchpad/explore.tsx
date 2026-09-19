@@ -1,4 +1,5 @@
 "use client";
+import { PlatformBadge } from "./platform-token";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Rocket, RefreshCw, Copy, Check } from "lucide-react";
@@ -85,7 +86,7 @@ export function TokenCard({ token }: { token: Token }) {
               className="lp-token-card-link"
               href={`/app/token/${token.id}`}
             >
-              ${token.ticker}
+              ${token.ticker} <PlatformBadge mint={token.mint} />
             </Link>
           </h3>
           <ArrowUpRight size={18} />

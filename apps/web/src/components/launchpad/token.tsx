@@ -1,4 +1,5 @@
 "use client";
+import { PlatformBadge, PlatformBanner } from "./platform-token";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -97,6 +98,7 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
           <ArrowLeft size={16} /> Explore
         </Link>
       </div>
+      <PlatformBanner mint={token.mint} />
       <header className="lp-token-heading">
         <img src={`/api/launchpad/image/${token.imageId}`} alt="" />
         <div>
@@ -108,7 +110,8 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
                 : "ON THE CURVE"}
           </span>
           <h1>
-            ${token.ticker} <small>{token.name}</small>
+            ${token.ticker} <PlatformBadge mint={token.mint} />{" "}
+            <small>{token.name}</small>
           </h1>
           <button
             className="lp-text-link"

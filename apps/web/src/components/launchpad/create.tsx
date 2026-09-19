@@ -87,12 +87,21 @@ export function CreateToken({
     if (!ticker) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      api<{ available: boolean; ticker: string; tokenId?: string }>(
-        `ticker?value=${encodeURIComponent(ticker)}`,
-      )
+      api<{
+        available: boolean;
+        ticker: string;
+        tokenId?: string;
+        reserved?: boolean;
+      }>(`ticker?value=${encodeURIComponent(ticker)}`)
         .then((data) => {
           if (!controller.signal.aborted) {
-            setAvailability(data.available ? "Available" : "Already claimed");
+            setAvailability(
+              data.reserved
+                ? "Reserved for One Only"
+                : data.available
+                  ? "Available"
+                  : "Already claimed",
+            );
             setExistingToken(data.tokenId ?? null);
           }
         })

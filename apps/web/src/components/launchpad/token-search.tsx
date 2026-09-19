@@ -1,4 +1,5 @@
 "use client";
+import { PlatformBadge } from "./platform-token";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -402,7 +403,9 @@ function SearchContents({
                 loading="lazy"
               />
               <span className="lp-search-token-copy">
-                <strong>{token.name}</strong>
+                <strong>
+                  {token.name} <PlatformBadge mint={token.mint} />
+                </strong>
                 <span>
                   ${token.ticker}
                   <span>

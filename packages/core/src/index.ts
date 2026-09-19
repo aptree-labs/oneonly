@@ -44,3 +44,5 @@ export * from "./network";
 export * from "./scaled-amounts";
 export * from "./display";
 export * from "./trade-amount";
+
+export * from "./platform-token";

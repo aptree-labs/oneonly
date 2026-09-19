@@ -1,4 +1,5 @@
 "use client";
+import { PlatformBadge } from "./platform-token";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import Link from "next/link";
@@ -263,7 +264,8 @@ export function Portfolio() {
                 {data.created.map((token) => (
                   <Link key={token.id} href={`/app/token/${token.id}`}>
                     <span>
-                      ${token.ticker} <small>{token.name}</small>
+                      ${token.ticker} <PlatformBadge mint={token.mint} />{" "}
+                      <small>{token.name}</small>
                     </span>
                     <span>{token.status} ↗</span>
                   </Link>

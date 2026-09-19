@@ -2,7 +2,7 @@ import { createPrefill } from "@/lib/create-prefill";
 import { CreateToken } from "@/components/launchpad/create";
 export const metadata = {
   title: "Launch a token",
-  alternates: { canonical: "https://app.oneonly.lol/app/create" },
+  alternates: { canonical: "https://oneonly.lol/app/create" },
 };
 export default async function Page({
   searchParams,

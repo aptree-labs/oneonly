@@ -27,7 +27,11 @@ import {
   assertNetwork,
   tradingPool,
 } from "@oneonly/protocol";
-import { canReleaseTicker, formatUnits } from "@oneonly/core";
+import {
+  canReleaseTicker,
+  formatUnits,
+  isReservedPlatformTicker,
+} from "@oneonly/core";
 import { historicalUsd } from "./price";
 import { reconcile } from "./transactions";
 import { indexGraduatedPool } from "./graduated-indexer";
@@ -316,6 +320,7 @@ export async function releaseInactiveTickers(now = new Date()) {
       .where(eq(tickerClaims.network, NETWORK));
   let released = 0;
   for (const claim of claims) {
+    if (isReservedPlatformTicker(claim.ticker)) continue;
     const pools = await db
       .select()
       .from(launchTokens)
