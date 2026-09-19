@@ -283,10 +283,6 @@ export function Explore({ initial }: { initial?: MarketResults }) {
           ))}
         </div>
       </section>
-      <p className="lp-market-note">
-        USD rankings · Rolling 24 hours · Indexed activity updates every few
-        minutes.
-      </p>
       {error ? (
         <div className="lp-empty">
           <h3>Couldn’t reach the registry.</h3>
