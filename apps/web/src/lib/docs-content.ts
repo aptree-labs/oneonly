@@ -61,6 +61,40 @@ export const guides: Guide[] = [
     ],
   },
   {
+    slug: "oneonly-token",
+    title: "$ONEONLY",
+    description: "Real revenue. Open-market buybacks. Permanent burns.",
+    sections: [
+      {
+        id: "why-it-exists",
+        title: "Revenue needs somewhere honest to go",
+        paragraphs: [
+          "Most platform tokens exist because a whitepaper said they should. $ONEONLY exists because the platform generates real revenue, and real revenue needs somewhere honest to go.",
+        ],
+      },
+      {
+        id: "fee-allocation",
+        title: "How $ONEONLY trades fund buybacks",
+        paragraphs: [
+          "Trades in the $ONEONLY platform token carry a 1.25% trading fee. Its creator’s share is allocated to $ONEONLY buybacks.",
+        ],
+        bullets: [
+          "0.25% goes to Meteora, the infrastructure One Only is built on.",
+          "0.5% is the $ONEONLY creator’s share, dedicated to buying back $ONEONLY.",
+          "0.5% goes to platform revenue.",
+        ],
+      },
+      {
+        id: "buyback-and-burn",
+        title: "Bought back. Burned permanently.",
+        paragraphs: [
+          "The creator-fee revenue allocated to buybacks is used to buy $ONEONLY on the open market. Every $ONEONLY token bought back under this program is burned, permanently removing it from supply once the burn transaction is confirmed.",
+          "Each completed burn reduces the token supply.",
+        ],
+      },
+    ],
+  },
+  {
     slug: "launch-a-token",
     title: "Launch a token",
     description: "Claim an available ticker and choose how it starts.",
@@ -165,6 +199,7 @@ export const guides: Guide[] = [
         title: "Trading on the curve",
         paragraphs: [
           "The published curve trading fee is 1.25%. The creator earns 0.5% of curve trading volume. These trading fees are separate from Solana network fees and any account rent required by the transaction.",
+          "For the $ONEONLY platform token, its creator’s share funds open-market $ONEONLY buybacks and permanent burns.",
           "An additional asset conversion can have its own fees and price impact. Check the route and transaction details for the trade you are making.",
         ],
       },
