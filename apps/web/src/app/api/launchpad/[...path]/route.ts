@@ -1,3 +1,4 @@
+import { loadLeaderboard } from "@/lib/launchpad/leaderboard";
 import { marketUsableUntil, type MarketResults } from "@/lib/market-results";
 import { publicCache } from "@/lib/cache/public-cache";
 import { publicPolicy, publicHeaders } from "@/lib/cache/public-policy";
@@ -115,6 +116,12 @@ async function handle(request: Request, path: string[]) {
         ),
       );
     }
+    if (action === "leaderboard")
+      return response(
+        await loadLeaderboard(
+          new URL(request.url).searchParams.get("period") ?? "24h",
+        ),
+      );
     if (action === "office") {
       after(async () => {
         await refreshRecentTrades().catch(() =>

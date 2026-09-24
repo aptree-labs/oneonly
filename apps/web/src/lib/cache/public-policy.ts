@@ -18,6 +18,7 @@ const policies: Record<string, Policy> = {
   },
   config: { fresh: 10, stale: 10, edge: 5, parameters: [] },
   "trade-assets": { fresh: 5, stale: 10, edge: 3, parameters: [] },
+  leaderboard: { fresh: 30, stale: 15, edge: 10, parameters: ["period"] },
   office: { fresh: 10, stale: 5, edge: 3, parameters: [] },
 };
 export function publicPolicy(request: Request, path: string[]) {
@@ -61,6 +62,15 @@ export function publicPolicy(request: Request, path: string[]) {
   const search = params.get("search");
   if (search !== null)
     params.set("search", search.trim().replace(/^\$/, "").toLowerCase());
+  if (path[0] === "leaderboard") {
+    const period = params.get("period") ?? "24h";
+    if (!["24h", "7d", "all"].includes(period))
+      throw new LaunchError({
+        message: "Invalid leaderboard period.",
+        status: 400,
+      });
+    params.set("period", period);
+  }
   params.sort();
   return { ...policy, key: `${path.join("/")}?${params}` };
 }

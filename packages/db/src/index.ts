@@ -82,6 +82,7 @@ async function connect() {
 export type Database = Awaited<ReturnType<typeof connect>>;
 export * from "./market";
 export * from "./office";
+export * from "./leaderboard";
 const globalDb = globalThis as unknown as { oneonlyDb?: Promise<Database> };
 export function getDatabase() {
   globalDb.oneonlyDb ??= connect().catch((error) => {

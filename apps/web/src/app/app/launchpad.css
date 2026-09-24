@@ -3847,3 +3847,220 @@ body:has(.launchpad[data-theme="dark"])
     height: 64px;
   }
 }
+
+/* Trader leaderboard */
+.lp-leaderboard {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.lp-leaderboard-trophy {
+  color: var(--lp-moss);
+  flex-shrink: 0;
+}
+.lp-leaderboard-toolbar,
+.lp-leaderboard-caption,
+.lp-leaderboard-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.lp-leaderboard-toolbar {
+  margin: 28px 0 24px;
+}
+.lp-leaderboard-periods {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--lp-border, #b4bfa4);
+  border-radius: 12px;
+}
+.lp-leaderboard-periods button {
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--lp-muted, #6b7960);
+  cursor: pointer;
+}
+.lp-leaderboard-periods button[aria-pressed="true"] {
+  background: var(--lp-acid);
+  color: var(--lp-ink);
+  font-weight: 700;
+}
+.lp-leaderboard-position {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--lp-muted, #6b7960);
+}
+.lp-leaderboard-position strong {
+  color: var(--lp-text, var(--lp-ink));
+  font-size: 24px;
+}
+.lp-leaderboard-board {
+  padding: 0;
+  overflow: hidden;
+}
+.lp-leaderboard-caption {
+  padding: 24px;
+  border-bottom: 1px solid var(--lp-border, #b4bfa4);
+}
+.lp-leaderboard-caption h2 {
+  font:
+    600 18px "Space Grotesk",
+    sans-serif;
+  margin: 0;
+}
+.lp-leaderboard-caption > span {
+  font-size: 13px;
+  color: var(--lp-muted, #6b7960);
+}
+.lp-leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.lp-leaderboard-table th,
+.lp-leaderboard-table td {
+  padding: 20px 24px;
+  text-align: left;
+  border-bottom: 1px solid var(--lp-border, #b4bfa4);
+}
+.lp-leaderboard-table thead th {
+  font-size: 12px;
+  color: var(--lp-muted, #6b7960);
+  font-weight: 500;
+}
+.lp-leaderboard-table td:nth-child(n + 3),
+.lp-leaderboard-table th:nth-child(n + 3) {
+  text-align: right;
+}
+.lp-leaderboard-table tbody th {
+  font-weight: 600;
+}
+.lp-leaderboard-table td:nth-child(3) {
+  font-weight: 700;
+  font-size: 20px;
+  white-space: nowrap;
+}
+.lp-leaderboard-table small {
+  display: block;
+  color: var(--lp-muted, #6b7960);
+  font-size: 12px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+.lp-leaderboard-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 35px;
+}
+.lp-leaderboard-first {
+  background: color-mix(in srgb, var(--lp-acid) 7%, transparent);
+}
+.lp-leaderboard-first .lp-leaderboard-rank {
+  color: var(--lp-moss);
+  font-weight: 700;
+}
+.lp-leaderboard-mine {
+  background: color-mix(in srgb, var(--lp-mint) 12%, transparent);
+}
+.lp-leaderboard-trader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.lp-leaderboard-avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lp-border, #b4bfa4);
+  color: var(--lp-muted, #6b7960);
+  overflow: hidden;
+}
+.lp-leaderboard-avatar img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.lp-leaderboard-identity a {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.lp-leaderboard-copy {
+  background: transparent;
+  border: 0;
+  color: var(--lp-muted, #6b7960);
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  min-height: 36px;
+  cursor: pointer;
+}
+.lp-leaderboard-copy:hover {
+  color: var(--lp-text, var(--lp-ink));
+}
+.lp-leaderboard-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--lp-muted, #6b7960);
+}
+.lp-leaderboard-pagination {
+  padding: 20px 24px;
+}
+.lp-leaderboard-status {
+  color: var(--lp-muted, #6b7960);
+  font-size: 12px;
+  min-height: 20px;
+  margin: 20px 0;
+}
+@media (max-width: 900px) {
+  .lp-leaderboard-extra {
+    display: none;
+  }
+  .lp-leaderboard-table th,
+  .lp-leaderboard-table td {
+    padding: 16px 12px;
+  }
+}
+@media (max-width: 540px) {
+  .lp-leaderboard-caption {
+    padding: 16px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .lp-leaderboard-table td:nth-child(3) {
+    font-size: 16px;
+  }
+  .lp-leaderboard-trader {
+    gap: 4px;
+  }
+  .lp-leaderboard-avatar,
+  .lp-leaderboard-trophy {
+    display: none;
+  }
+  .lp-leaderboard-identity {
+    font-size: 12px;
+  }
+  .lp-leaderboard-rank {
+    min-width: 20px;
+    gap: 3px;
+  }
+  .lp-leaderboard-periods button {
+    padding: 10px 12px;
+  }
+  .lp-leaderboard-position > span {
+    font-size: 12px;
+  }
+}

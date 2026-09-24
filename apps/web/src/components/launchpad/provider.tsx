@@ -44,6 +44,7 @@ import {
   Sun,
   Moon,
   Building2,
+  Trophy,
   BookOpen,
   MessageCircle,
   Volume2,
@@ -408,6 +409,7 @@ function Shell({
     { href: "/app", label: "Explore", Icon: Compass },
     { href: "/app/create", label: "Launch a token", Icon: Rocket },
     { href: "/app/portfolio", label: "Your wallet", Icon: Wallet },
+    { href: "/app/leaderboard", label: "Leaderboard", Icon: Trophy },
     { href: "/app/office", label: "Retard Office", Icon: Building2 },
     { href: "/app/docs", label: "Docs", Icon: BookOpen },
   ];
@@ -508,11 +510,13 @@ function Shell({
                   ? "THE LAUNCH BAY"
                   : pathname.includes("portfolio")
                     ? "YOUR CORNER"
-                    : pathname.includes("office")
-                      ? "RETARD OFFICE"
-                      : pathname.includes("token/")
-                        ? "THE MARKET"
-                        : "THE WASTELAND"}
+                    : pathname.includes("leaderboard")
+                      ? "THE LEADERBOARD"
+                      : pathname.includes("office")
+                        ? "RETARD OFFICE"
+                        : pathname.includes("token/")
+                          ? "THE MARKET"
+                          : "THE WASTELAND"}
             </span>
             <div className="lp-topbar-actions">
               <button

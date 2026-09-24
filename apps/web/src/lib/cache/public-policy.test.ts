@@ -50,3 +50,20 @@ it("sets a short Vercel cache lifetime without browser persistence", () => {
 it("rejects duplicate filters instead of bypassing the cache", () => {
   expect(() => policy("tokens", "?search=a&search=b")).toThrow("Duplicate");
 });
+
+it("limits leaderboard caching to three shared period keys", () => {
+  expect(policy("leaderboard")?.key).toBe("leaderboard?period=24h");
+  expect(policy("leaderboard", "?period=24h")?.key).toBe(
+    policy("leaderboard")?.key,
+  );
+  expect(policy("leaderboard", "?period=7d")?.fresh).toBe(30);
+  expect(policy("leaderboard", "?period=all")?.edge).toBe(10);
+  expect(() => policy("leaderboard", "?period=1h")).toThrow(
+    "Invalid leaderboard",
+  );
+  expect(() => policy("leaderboard", "?period=24h&period=all")).toThrow(
+    "Duplicate",
+  );
+  expect(() => policy("leaderboard", "?wallet=abc")).toThrow("Unexpected");
+  expect(() => policy("leaderboard", "?page=999")).toThrow("Unexpected");
+});
