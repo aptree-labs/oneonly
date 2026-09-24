@@ -1,10 +1,12 @@
 # One Only
 
-One Only’s early-access site and Solana mainnet launchpad, built as a pnpm + TypeScript monorepo. The landing page and app deploy separately, with separate PostgreSQL databases. Original art and sounds live in `assets/`; `bible.md` is product context.
+One Only is a Solana token launchpad built around unique tickers, with Meteora bonding curves, automatic trade routing, and on-chain activity indexing. It is a pnpm + TypeScript monorepo. Original art and sounds live in `assets/`; `bible.md` is product context.
+
+[Live app](https://oneonly.lol) · [User docs](https://oneonly.lol/app/docs) · [Telegram support](https://t.me/OneOnlylol_bot)
 
 ## Current production release
 
-The launchpad runs at **https://app.oneonly.lol**; local development defaults to devnet. Production public-data caching and traffic analytics are documented in [caching and capacity](docs/caching-and-capacity-2026-09-19.md) and [Web Analytics](docs/web-analytics.md). See [mainnet operations](docs/mainnet.md) and the [Token-2022 rollout](docs/token2022-rollout-2026-09-19.md) for configuration and remaining owner-controlled setup.
+The launchpad runs at **https://oneonly.lol**; local development defaults to devnet. Production public-data caching and traffic analytics are documented in [caching and capacity](docs/caching-and-capacity-2026-09-19.md) and [Web Analytics](docs/web-analytics.md). See [mainnet operations](docs/mainnet.md) and the [Token-2022 rollout](docs/token2022-rollout-2026-09-19.md) for configuration and remaining owner-controlled setup.
 
 This snapshot matches the deployed launchpad source. Environment secrets, local database files, build output, and unfinished admin work are excluded.
 
@@ -81,7 +83,7 @@ Unit tests cover Effect validation, actual PostgreSQL migrations in PGlite, and 
 
 ## Live site and sharing
 
-Production: **https://oneonly.lol**, Vercel project `kade/oneonly`, root directory `apps/web`, Node.js 22. PostgreSQL is the dedicated `oneonly-db` resource in Kade's existing Neon integration (free plan, `iad1`). `DATABASE_URL` comes from that integration; `APP_URL` is `https://oneonly.lol`.
+Production: **https://oneonly.lol**, Vercel project `oneonly-app`, root directory `apps/web`, Node.js 22. The app uses its own PostgreSQL database. The former early-access deployment remains a separate X OAuth backend; the main app forwards the existing authentication paths to it. See the [main-domain launch notes](docs/apex-launch-2026-09-19.md) before changing that routing.
 
 The metadata source is `apps/web/src/lib/site.ts`. It uses the canonical production domain for Open Graph, the X large-image card, the sitemap, and crawler discovery. The 1200×630 JPEG is a static, publicly fetchable file, so social crawlers do not need JavaScript or an image-generation server. The supplied official logo is in `assets/brand/oneonly-logo.jpg`. Optimized WebP logo sizes accompany a 64px PNG tab icon, 16/32/48px favicon, 180px Apple icon, and 192/512px app icons.
 
@@ -101,7 +103,7 @@ Prepare an isolated release with `node scripts/prepare-release.mjs landing` or `
 
 ## Trading app
 
-The app lives at **https://app.oneonly.lol** (`kade/oneonly-app`), with its own free Neon database `oneonly-app-db`. Local routes start at `/app`. See [the app operations guide](docs/launchpad.md) for configuration, transaction guarantees, inactivity rules, tests, and current scope.
+The app lives at **https://oneonly.lol**, with its own PostgreSQL database. The former `app.oneonly.lol` hostname redirects to the main domain. Local routes start at `/app`. See [the app operations guide](docs/launchpad.md) for configuration, transaction guarantees, inactivity rules, tests, and current scope.
 
 ### Signup sharing and updated scene audio
 
