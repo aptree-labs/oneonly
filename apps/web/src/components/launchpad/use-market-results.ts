@@ -12,6 +12,7 @@ import {
 export function useMarketResults(
   params: URLSearchParams,
   initial?: MarketResults,
+  enabled = true,
 ) {
   const key = marketKey(params);
   const initialKey = useRef(key);
@@ -25,6 +26,7 @@ export function useMarketResults(
   });
   const [revision, setRevision] = useState(0);
   useEffect(() => {
+    if (!enabled) return;
     let current = true,
       loading = false;
     if (
@@ -38,7 +40,12 @@ export function useMarketResults(
       seedMarket(key, initial);
     seeded.current = true;
     const cached = peekMarket(key);
-    setState({ key, data: cached, error: "", refreshing: true });
+    setState((previous) => ({
+      key,
+      data: cached ?? (previous.key === key ? previous.data : undefined),
+      error: "",
+      refreshing: true,
+    }));
     async function load(force = false) {
       if (loading || document.hidden) return;
       loading = true;
@@ -77,7 +84,7 @@ export function useMarketResults(
       window.removeEventListener("focus", focus);
       document.removeEventListener("visibilitychange", focus);
     };
-  }, [key, revision, transactionRevision]);
+  }, [key, revision, transactionRevision, enabled]);
   const matching = state.key === key;
   return {
     data: matching ? state.data : undefined,

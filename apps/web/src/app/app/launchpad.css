@@ -4064,3 +4064,16 @@ body:has(.launchpad[data-theme="dark"])
     font-size: 12px;
   }
 }
+
+.lp-explore-pages {
+  display: grid;
+  gap: 24px;
+}
+.lp-infinite-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 0;
+  color: var(--lp-muted, #6b7960);
+}

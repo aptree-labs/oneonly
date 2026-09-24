@@ -2,10 +2,10 @@
 import { PlatformBadge } from "./platform-token";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Rocket, RefreshCw, Copy, Check } from "lucide-react";
+import { ArrowUpRight, RefreshCw, Copy, Check } from "lucide-react";
 import { number, short, useLaunchpad } from "./provider";
 import { TokenSearch } from "./token-search";
-import { useMarketResults } from "./use-market-results";
+import { InfiniteTokens } from "./infinite-tokens";
 import type { MarketResults } from "@/lib/market-results";
 export type Token = {
   id: string;
@@ -91,6 +91,7 @@ export function TokenCard({
           <h3>
             <Link
               className="lp-token-card-link"
+              prefetch={false}
               href={`/app/token/${token.id}`}
             >
               ${token.ticker} <PlatformBadge mint={token.mint} />
@@ -214,20 +215,9 @@ function PeeCharacter() {
 export function Explore({ initial }: { initial?: MarketResults }) {
   const [filter, setFilter] = useState("All"),
     [sort, setSort] = useState("volume"),
-    [page, setPage] = useState(0);
-  const params = new URLSearchParams({
-    sort,
-    pair: filter,
-    page: String(page),
-  });
-  const {
-    data,
-    error,
-    busy: loading,
-    reload,
-  } = useMarketResults(params, initial);
-  const tokens = data?.tokens ?? [],
-    total = data?.total ?? 0;
+    [revision, setRevision] = useState(0),
+    [total, setTotal] = useState(initial?.total ?? 0);
+  const reload = () => setRevision((value) => value + 1);
   return (
     <>
       <section className="lp-explore-hero">
@@ -276,8 +266,10 @@ export function Explore({ initial }: { initial?: MarketResults }) {
                 key={value}
                 aria-pressed={sort === value}
                 onClick={() => {
-                  setSort(value);
-                  setPage(0);
+                  if (sort !== value) {
+                    setSort(value);
+                    setTotal(0);
+                  }
                 }}
               >
                 {label}
@@ -292,8 +284,10 @@ export function Explore({ initial }: { initial?: MarketResults }) {
               key={value}
               aria-pressed={filter === value}
               onClick={() => {
-                setFilter(value);
-                setPage(0);
+                if (filter !== value) {
+                  setFilter(value);
+                  setTotal(0);
+                }
               }}
             >
               {value}
@@ -301,66 +295,17 @@ export function Explore({ initial }: { initial?: MarketResults }) {
           ))}
         </div>
       </section>
-      {error && !data ? (
-        <div className="lp-empty">
-          <h3>Couldn’t reach the registry.</h3>
-          <p role="alert">{error}</p>
-          <button className="lp-secondary" onClick={reload}>
-            Try again
-          </button>
-        </div>
-      ) : loading ? (
-        <div className="lp-empty" aria-live="polite">
-          Finding the latest launches…
-        </div>
-      ) : tokens.length ? (
-        <div className="lp-token-grid">
-          {tokens.map((token, index) => (
-            <TokenCard key={token.id} token={token} priority={index < 4} />
-          ))}
-        </div>
-      ) : (
-        <div className="lp-empty">
-          <span className="lp-empty-icon">
-            <Rocket size={26} />
-          </span>
-          <h3>
-            {filter === "All" ? "Unclaimed territory." : "No matching tokens."}
-          </h3>
-          <p>
-            {filter === "All"
-              ? "No tokens have launched here yet. The first one could be yours."
-              : "Try another pair."}
-          </p>
-          {filter === "All" && (
-            <Link className="lp-text-link" href="/app/create">
-              Make the first move <ArrowUpRight size={16} />
-            </Link>
-          )}
-        </div>
-      )}
-      {!loading && !error && (total > 24 || page > 0) && (
-        <nav className="lp-pagination" aria-label="Token pages">
-          <button
-            className="lp-secondary"
-            disabled={page === 0}
-            onClick={() => setPage((value) => value - 1)}
-          >
-            Previous
-          </button>
-          <span>
-            Page {page + 1}
-            {total ? ` of ${Math.ceil(total / 24)}` : ""}
-          </span>
-          <button
-            className="lp-secondary"
-            disabled={(page + 1) * 24 >= total}
-            onClick={() => setPage((value) => value + 1)}
-          >
-            Next
-          </button>
-        </nav>
-      )}
+      <InfiniteTokens
+        key={`${sort}:${filter}:${revision}`}
+        sort={sort}
+        pair={filter}
+        initial={
+          revision === 0 && sort === "volume" && filter === "All"
+            ? initial
+            : undefined
+        }
+        onTotal={setTotal}
+      />
       <div className="lp-rules-strip">
         <span className="lp-rule-number">30 DAYS</span>
         <div>
