@@ -33,7 +33,8 @@ vi.mock("@oneonly/protocol", async (original) => ({
 }));
 vi.mock("./history-rpc", async () => ({
   historyConnection: () => mock.rpc,
-  readHistoryReceipt: async (rpc: any, signature: string) => (await import("@oneonly/protocol")).readEventReceipt(rpc, signature),
+  readHistoryReceipt: async (rpc: any, signature: string) =>
+    (await import("@oneonly/protocol")).readEventReceipt(rpc, signature),
 }));
 vi.mock("./price", () => ({ historicalUsd: mock.historical }));
 import {
@@ -235,8 +236,8 @@ it("continues a pool scan past version-1 trades and reaches the launch boundary"
 
 it("keeps the platform ticker permanently reserved while releasing ordinary inactive tickers", async () => {
   const now = new Date("2026-09-19T12:00:00Z");
-  const createdAt = new Date("2026-09-01T00:00:00Z");
-  for (const ticker of ["ONEONLY", "QUIETCOIN"]) {
+  const createdAt = new Date("2026-08-01T00:00:00Z");
+  for (const ticker of ["ONEONLY", "QUIETCOIN", "RECENTBUY"]) {
     const id = randomUUID();
     await local.db.insert(launchTokens).values({
       id,
@@ -269,10 +270,28 @@ it("keeps the platform ticker permanently reserved while releasing ordinary inac
       indexedThrough: now,
     });
   }
+  const [active] = await local.db
+    .select()
+    .from(launchTokens)
+    .where(eq(launchTokens.ticker, "RECENTBUY"));
+  await local.db.insert(tokenTrades).values({
+    tokenId: active.id,
+    signature: "older-than-three-days",
+    eventIndex: 0,
+    venue: "dbc",
+    wallet: PublicKey.default.toBase58(),
+    side: "buy",
+    baseAmount: "10000",
+    quoteAmount: "1",
+    priceQuote: "0.0001",
+    volumeUsd: 100,
+    blockTime: new Date("2026-09-01T00:00:00Z"),
+  });
   expect(await releaseInactiveTickers(now)).toBe(1);
   const claims = await local.db.select().from(tickerClaims);
   expect(claims.some((claim) => claim.ticker === "ONEONLY")).toBe(true);
   expect(claims.some((claim) => claim.ticker === "QUIETCOIN")).toBe(false);
+  expect(claims.some((claim) => claim.ticker === "RECENTBUY")).toBe(true);
   const [official] = await local.db
     .select()
     .from(launchTokens)

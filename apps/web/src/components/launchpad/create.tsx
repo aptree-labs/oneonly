@@ -536,7 +536,7 @@ export function CreateToken({
               </p>
             ))}
             <div className="lp-fact-note">
-              Below $100 daily volume in every pool for three complete UTC days?
+              Below $100 daily volume in every pool for 30 complete UTC days?
               The ticker is released. Your token and its trading history remain.
             </div>
           </div>

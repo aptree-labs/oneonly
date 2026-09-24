@@ -53,7 +53,7 @@ export const guides: Guide[] = [
         id: "active-names",
         title: "Names stay with active communities",
         paragraphs: [
-          "A ticker can be released when every pool under it has less than $100 of daily trading volume for three complete UTC days, once the app has enough verified history to apply that rule.",
+          "A ticker can be released when every pool under it has less than $100 of daily trading volume for 30 complete UTC days, once the app has enough verified history to apply that rule.",
           "Releasing a ticker does not erase the old token, your balance, or its trading history. Always check the contract address when returning to a ticker that may have been claimed again.",
           "Clearer discovery is the goal. A unique ticker does not guarantee demand, liquidity, or a profitable trade.",
         ],

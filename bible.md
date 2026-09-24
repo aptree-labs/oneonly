@@ -14,7 +14,7 @@ Five stages cover the entire lifecycle of a ticker on the platform:
 
 * Trade: the token trades on its Meteora DBC bonding curve against whichever pair the creator chose, until it either graduates or delist from UI.
 
-* Delist: any pool with 3 days of less 100$ volume ; once every pool on a ticker is quiet, the name itself is released back into the registry for someone new to claim.
+* Delist: any pool with 30 days of less 100$ volume ; once every pool on a ticker is quiet, the name itself is released back into the registry for someone new to claim.
 
 # **What We're Building On**
 
@@ -49,7 +49,7 @@ Every pool charges total 1,25% fee on trade. How that's split depends on how the
 
 # **Keeping the Registry Clean**
 
-Any single pool goes quiet, it is delisted from one only after 3 days with less than 100$ trading volume. The ticker itself is only freed up for someone else to claim once every one of its pools has gone quiet; a ticker with one dead pool and one active pool stays claimed.&nbsp;
+Any single pool goes quiet, it is delisted from one only after 30 days with less than 100$ trading volume. The ticker itself is only freed up for someone else to claim once every one of its pools has gone quiet; a ticker with one dead pool and one active pool stays claimed.&nbsp;
 
 # **Launch Plan (context, not a spec)**
 

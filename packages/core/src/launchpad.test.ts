@@ -76,8 +76,8 @@ describe("launchpad rules", () => {
   });
   const now = new Date("2026-09-11T15:00:00Z");
   const covered = {
-    createdAt: new Date("2026-09-01Z"),
-    coverageStart: new Date("2026-09-01Z"),
+    createdAt: new Date("2026-08-01Z"),
+    coverageStart: new Date("2026-08-01Z"),
     indexedThrough: new Date("2026-09-11Z"),
     hasUnknownVolume: false,
     dailyVolumes: [
@@ -86,7 +86,7 @@ describe("launchpad rules", () => {
       { day: "2026-09-10", usd: 99.99 },
     ],
   };
-  it("releases only below $100 on each of three complete UTC days", () => {
+  it("releases only below $100 on each of 30 complete UTC days", () => {
     expect(canReleaseTicker([covered], now)).toBe(true);
     expect(
       canReleaseTicker(
@@ -94,6 +94,40 @@ describe("launchpad rules", () => {
         now,
       ),
     ).toBe(false);
+  });
+  it("waits for all 30 complete days and checks the oldest day", () => {
+    const start = new Date("2026-08-12T00:00:00Z");
+    expect(
+      canReleaseTicker(
+        [{ ...covered, createdAt: start, coverageStart: start }],
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canReleaseTicker(
+        [{ ...covered, createdAt: new Date(start.getTime() + 1) }],
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      canReleaseTicker(
+        [{ ...covered, coverageStart: new Date(start.getTime() + DAY) }],
+        now,
+      ),
+    ).toBe(false);
+    for (const day of ["2026-08-12", "2026-08-25", "2026-09-11"])
+      expect(
+        canReleaseTicker(
+          [{ ...covered, dailyVolumes: [{ day, usd: 100 }] }],
+          now,
+        ),
+      ).toBe(false);
+    expect(
+      canReleaseTicker(
+        [{ ...covered, dailyVolumes: [{ day: "2026-08-11", usd: 100 }] }],
+        now,
+      ),
+    ).toBe(true);
   });
   it("requires every pool and complete verifiable history", () => {
     for (const broken of [
@@ -108,7 +142,7 @@ describe("launchpad rules", () => {
       );
     expect(canReleaseTicker([], now)).toBe(false);
   });
-  it("does not count an unfinished UTC day toward the three-day period", () => {
+  it("does not count an unfinished UTC day toward the 30-day period", () => {
     expect(
       canReleaseTicker(
         [{ ...covered, indexedThrough: new Date("2026-09-10T23:59:59Z") }],

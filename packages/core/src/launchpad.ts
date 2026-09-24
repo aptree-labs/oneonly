@@ -3,6 +3,7 @@ import { isReservedPlatformTicker } from "./platform-token";
 export const TOKEN_SUPPLY = 1_000_000_000;
 export const TOKEN_DECIMALS = 6;
 export const DAY = 86_400_000;
+export const TICKER_INACTIVITY_DAYS = 30;
 export const QUOTES = ["SOL", "USDC"] as const;
 export type QuoteSymbol = (typeof QUOTES)[number];
 export class LaunchError extends Data.TaggedError("LaunchError")<{
@@ -270,7 +271,7 @@ export const validateLaunch = (input: unknown) =>
       }),
     ),
   );
-/** Three complete UTC days, each below $100, with complete indexing for every pool. */
+/** Thirty complete UTC days, each below $100, with complete indexing for every pool. */
 export function canReleaseTicker(
   pools: {
     createdAt: Date;
@@ -285,7 +286,7 @@ export function canReleaseTicker(
   const midnight = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
   );
-  const start = new Date(midnight.getTime() - 3 * DAY);
+  const start = new Date(midnight.getTime() - TICKER_INACTIVITY_DAYS * DAY);
   return pools.every((pool) => {
     if (
       pool.createdAt > start ||
@@ -303,7 +304,10 @@ export function canReleaseTicker(
         .reduce((sum, row) => sum + (row.usd ?? 0), 0) >= 100
     )
       return false;
-    return [1, 2, 3].every((offset) => {
+    return Array.from(
+      { length: TICKER_INACTIVITY_DAYS },
+      (_, i) => i + 1,
+    ).every((offset) => {
       const day = new Date(midnight.getTime() - offset * DAY)
         .toISOString()
         .slice(0, 10);

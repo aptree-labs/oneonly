@@ -362,13 +362,12 @@ export function Explore({ initial }: { initial?: MarketResults }) {
         </nav>
       )}
       <div className="lp-rules-strip">
-        <span className="lp-rule-number">3 DAYS</span>
+        <span className="lp-rule-number">30 DAYS</span>
         <div>
           <strong>A ticker has to earn its place.</strong>
           <p>
-            If every pool stays below $100 in daily volume for three complete
-            days, the ticker becomes available again. Existing tokens stay
-            on-chain.
+            If every pool stays below $100 in daily volume for 30 complete days,
+            the ticker becomes available again. Existing tokens stay on-chain.
           </p>
         </div>
       </div>

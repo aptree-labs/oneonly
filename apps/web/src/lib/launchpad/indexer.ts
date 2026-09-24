@@ -31,6 +31,8 @@ import {
 } from "@oneonly/protocol";
 import {
   canReleaseTicker,
+  TICKER_INACTIVITY_DAYS,
+  DAY,
   formatUnits,
   isReservedPlatformTicker,
 } from "@oneonly/core";
@@ -354,7 +356,7 @@ export async function releaseInactiveTickers(now = new Date()) {
           .where(eq(poolSnapshots.tokenId, token.id));
         const start = new Date(
           Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()) -
-            3 * 86_400_000,
+            TICKER_INACTIVITY_DAYS * DAY,
         );
         const trades = await db
           .select()

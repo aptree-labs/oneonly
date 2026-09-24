@@ -48,7 +48,7 @@ async function readConfig() {
     quotes,
     prices: references,
     tickerPolicy:
-      "Below $100 per complete UTC day for three days across every pool",
+      "Below $100 per complete UTC day for 30 days across every pool",
     fees: { dbc: 1.25, creator: 0.5, platform: 0.5, protocol: 0.25 },
   };
 }
