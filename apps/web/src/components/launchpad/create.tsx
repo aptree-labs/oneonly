@@ -1,7 +1,8 @@
 "use client";
 import Link from "next/link";
 import { Select } from "./select";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { prepareTokenImage } from "@/lib/token-image";
 import {
   ImagePlus,
   ArrowUpRight,
@@ -48,10 +49,12 @@ export function CreateToken({
     [includeFirstBuy, setIncludeFirstBuy] = useState(false),
     [slippage, setSlippage] = useState("1"),
     [image, setImage] = useState(""),
+    [imageBusy, setImageBusy] = useState(false),
     [availability, setAvailability] = useState(""),
     [existingToken, setExistingToken] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const imageSelection = useRef(0);
   useEffect(() => {
     api<Config>("config")
       .then(setConfig)
@@ -116,40 +119,27 @@ export function CreateToken({
   }, [ticker]);
   async function selectImage(file: File | undefined) {
     if (!file) return;
+    const selection = ++imageSelection.current;
     setError("");
-    if (
-      !["image/png", "image/jpeg", "image/webp"].includes(file.type) ||
-      file.size > 10_000_000
-    ) {
-      setError("Choose a PNG, JPEG, or WebP under 10 MB.");
-      return;
-    }
+    setImage("");
+    setImageBusy(true);
     try {
-      const bitmap = await createImageBitmap(file),
-        canvas = document.createElement("canvas");
-      canvas.width = 512;
-      canvas.height = 512;
-      const context = canvas.getContext("2d")!;
-      const side = Math.min(bitmap.width, bitmap.height);
-      context.drawImage(
-        bitmap,
-        (bitmap.width - side) / 2,
-        (bitmap.height - side) / 2,
-        side,
-        side,
-        0,
-        0,
-        512,
-        512,
-      );
-      bitmap.close();
-      setImage(canvas.toDataURL("image/webp", 0.82));
-    } catch {
-      setError("That image could not be loaded.");
+      const prepared = await prepareTokenImage(file);
+      if (selection === imageSelection.current) setImage(prepared);
+    } catch (error) {
+      if (selection === imageSelection.current)
+        setError(
+          error instanceof Error
+            ? error.message
+            : "That image could not be loaded.",
+        );
+    } finally {
+      if (selection === imageSelection.current) setImageBusy(false);
     }
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (imageBusy) return;
     setBusy(true);
     setError("");
     try {
@@ -212,7 +202,9 @@ export function CreateToken({
             ) : (
               <>
                 <ImagePlus size={29} />
-                <strong>Give it a face</strong>
+                <strong>
+                  {imageBusy ? "Preparing image…" : "Give it a face"}
+                </strong>
                 <span>PNG, JPEG or WebP · square crop</span>
               </>
             )}
@@ -498,7 +490,9 @@ export function CreateToken({
           )}
           <button
             className="lp-primary lp-full"
-            disabled={busy || !enabled || availability !== "Available"}
+            disabled={
+              busy || imageBusy || !enabled || availability !== "Available"
+            }
           >
             {busy ? (
               <LoaderCircle size={18} className="lp-spin" />

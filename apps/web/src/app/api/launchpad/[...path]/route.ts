@@ -1,4 +1,5 @@
 import { loadLeaderboard } from "@/lib/launchpad/leaderboard";
+import { MAX_TOKEN_IMAGE_BYTES } from "@/lib/token-image";
 import { marketUsableUntil, type MarketResults } from "@/lib/market-results";
 import { publicCache } from "@/lib/cache/public-cache";
 import { publicPolicy, publicHeaders } from "@/lib/cache/public-policy";
@@ -533,7 +534,8 @@ async function handle(request: Request, path: string[]) {
     if (action === "image") {
       await rateLimit(`image:${wallet}`, 5);
       const data = Buffer.from(string(body.data), "base64");
-      if (data.length > 280_000) fail("Choose an image under 280 KB.", 413);
+      if (data.length > MAX_TOKEN_IMAGE_BYTES)
+        fail("Choose an image under 280 KB.", 413);
       const png = data
         .subarray(0, 8)
         .equals(Buffer.from("89504e470d0a1a0a", "hex"));
