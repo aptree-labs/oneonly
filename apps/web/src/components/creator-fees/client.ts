@@ -12,6 +12,7 @@ export type FeeStatus = {
   enabled: boolean;
   network: string;
   lookupAvailable: boolean;
+  bindingAvailable: boolean;
   escrowAvailable: boolean;
 };
 export async function feeApi<T>(

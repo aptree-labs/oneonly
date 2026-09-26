@@ -1,0 +1,36 @@
+{
+  "signatures": {
+    "create-config": "2Uk5e6hrNjPLrwBGngVPnCp5v3d4ffHCdth2bje26uWSWFRGFdXapZbBaCGNP9u7ZaTDKg7q9Wq5bhRFfaxvF3Rr",
+    "launch-token2022": "Uthe6MVLgLpbAX2j7dhB2gfkAjcEqNR9uVrTAMRkAhC1aDJwwsCAJXu2x9BoWzAnfAex5tjhFkQqWXE75dgiqXa",
+    "dbc-buy": "2gJcLfXrcLTkcAQLFt6DGnLjp2zTJ8GVa7yHFttuYkCUp5U4p9zJ9tC1aUfMV35dT6RhiUsTLpEu4Vfeff7q3Dfd",
+    "dbc-collect": "4TBArCd9zgWND5AknCSvgRjcyk5E5SVfJS65XAxL3fQKog3kEy8sCUMZFuRqPa4yke8TxM3xNgZiSwzyQkw6ji2f",
+    "dbc-claim": "53ECXrXw1DdMugyqdY6VBTvcvTCBMgxmXzyE43RjotqQWY8TDYxxrekpu7MA65vhBLXfdu7UQoTWAg95YiVmFodr",
+    "final-buy": "5YC6Du1CZTTHhrtQSqxKVgyx5QY5m7YNFvTmPwysNuR7m52m4icKyK7Qvt6vVCf9wETM3xeLWhrvWih1xKonvvyD",
+    "graduate": "2akek3DTdi64jc3rCdpcGuw2wUcDmi3KBP9mK3hKtKctqFRx4HtnRn2tV2C5iikoyESszHhMtjCwV5kbHg97ZawF",
+    "damm-buy": "tBxr7HAAAeZP3U4rH8ZRp2hEDHZz9PxLmJSmAQpun2vNsEEPXG8JTgDXzijxNVDbT44ko7taU3xp3FhLkEwKFa1",
+    "damm-sell": "5zYLHdJFi9ssVBT9bog5YYCg7XWp5uoXPUnjAJmkBwfoEjdo9iB67PQjdcy1Viv1bf7yuHTxByvS8DDdaNC2bZa8",
+    "postgrad-dbc-collect": "3FKPsfMTTXa2LyhfTmnYTuF8g5C1Fux9ojAmDttSYdy59BgngAyQeLS5MZ7pkz9xu6RSb475KCHazGWWCx2o2dv8",
+    "damm-collect": "3CFEVZvuW2Gr1sprwi2nrje3cp9snD4BVcbY55BSvLyU75WWmTes5d6wUQ1EbVZvBKWKqt8s8ya9fsE79AQFAu4T",
+    "damm-claim": "2NyM842E9zqEKHz3r2XGL617P5W5nNycUTBgPPk4xswZ88o1hcQJyJDCYj3eSK5EVu5GttgrsnqGvJjhf46bQmQD"
+  },
+  "config": "EVfeTmSHKdJUCHNZXL3yecu3gp7yCKq72pLa4bFLNSSx",
+  "pool": "3kSHjbcyx2hWjreDNxPqBvNR4ZtaijBF6gEQbmasMvp7",
+  "mint": "2GjDc5HfPbXEGebfnN7nqNhtyXGZH7JGUrVkYxiFncMb",
+  "dbc-claim": {
+    "amount": "125000",
+    "cumulative": "125000"
+  },
+  "damm-claim": {
+    "amount": "129165",
+    "cumulative": "254165"
+  },
+  "network": "devnet",
+  "program": "BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4",
+  "programSha256": "c750f70aa4fab8be7169362df11c1dc1f15dd642b6e71b9a45245fbefdd67f69",
+  "verification": "Fixture-signed claims; X API verification not exercised.",
+  "allReceiptsFinalized": true,
+  "dammPool": "4y71CiPnR9FSd8zr4NfUwRDho6bWV7wF8K5VM8F7SMAW",
+  "creatorPosition": "GBkMword3rhvU2yHJG7GhTAMnu3vvMYdEX9BJQGbFZdg",
+  "totalQuoteCollected": "1016662",
+  "beneficiaryClaimedQuote": "254165"
+}

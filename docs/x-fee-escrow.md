@@ -55,3 +55,24 @@ Migration `0009_purple_nighthawk.sql` adds separate allocation, profile, binding
 - Build the SBF program and follow the guarded scripts under `packages/fee-escrow/scripts` for devnet deployment/lifecycle checks. These must verify devnet before signing.
 
 The tests cover replay, changed claim scope, wrong identities/destinations, missing or forged signatures, frozen caps, real SPL/Token-2022 transfers, DBC/DAMM fee collection, repeat collection, and transaction packet limits. Mocked provider tests do not establish that live OAuth, provider access or posting is configured; those require a separate real-account acceptance test.
+
+
+## Live devnet validation — 26 September 2026
+
+The deployed program is [`BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4`](https://explorer.solana.com/address/BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4?cluster=devnet). Its deployed bytes match the tested artifact SHA256 `c750f70aa4fab8be7169362df11c1dc1f15dd642b6e71b9a45245fbefdd67f69`.
+
+A fresh Token-2022 mint [`2GjDc5HfPbXEGebfnN7nqNhtyXGZH7JGUrVkYxiFncMb`](https://explorer.solana.com/address/2GjDc5HfPbXEGebfnN7nqNhtyXGZH7JGUrVkYxiFncMb?cluster=devnet) was launched with two recipients split 25% / 75%. The dedicated 0.2 SOL graduation configuration is a lifecycle-test fixture; it is not the staging platform's launch configuration.
+
+| Verified step | Devnet receipt |
+| --- | --- |
+| Atomic Token-2022 launch and allocation | [Launch](https://explorer.solana.com/tx/Uthe6MVLgLpbAX2j7dhB2gfkAjcEqNR9uVrTAMRkAhC1aDJwwsCAJXu2x9BoWzAnfAex5tjhFkQqWXE75dgiqXa?cluster=devnet) |
+| DBC fee collection and first claim | [Collection](https://explorer.solana.com/tx/4TBArCd9zgWND5AknCSvgRjcyk5E5SVfJS65XAxL3fQKog3kEy8sCUMZFuRqPa4yke8TxM3xNgZiSwzyQkw6ji2f?cluster=devnet), [claim](https://explorer.solana.com/tx/53ECXrXw1DdMugyqdY6VBTvcvTCBMgxmXzyE43RjotqQWY8TDYxxrekpu7MA65vhBLXfdu7UQoTWAg95YiVmFodr?cluster=devnet) |
+| Graduation to DAMM v2 | [Graduation](https://explorer.solana.com/tx/2akek3DTdi64jc3rCdpcGuw2wUcDmi3KBP9mK3hKtKctqFRx4HtnRn2tV2C5iikoyESszHhMtjCwV5kbHg97ZawF?cluster=devnet) |
+| DAMM buy and sell | [Buy](https://explorer.solana.com/tx/tBxr7HAAAeZP3U4rH8ZRp2hEDHZz9PxLmJSmAQpun2vNsEEPXG8JTgDXzijxNVDbT44ko7taU3xp3FhLkEwKFa1?cluster=devnet), [sell](https://explorer.solana.com/tx/5zYLHdJFi9ssVBT9bog5YYCg7XWp5uoXPUnjAJmkBwfoEjdo9iB67PQjdcy1Viv1bf7yuHTxByvS8DDdaNC2bZa8?cluster=devnet) |
+| DAMM fee collection and second cumulative claim | [Collection](https://explorer.solana.com/tx/3CFEVZvuW2Gr1sprwi2nrje3cp9snD4BVcbY55BSvLyU75WWmTes5d6wUQ1EbVZvBKWKqt8s8ya9fsE79AQFAu4T?cluster=devnet), [claim](https://explorer.solana.com/tx/2NyM842E9zqEKHz3r2XGL617P5W5nNycUTBgPPk4xswZ88o1hcQJyJDCYj3eSK5EVu5GttgrsnqGvJjhf46bQmQD?cluster=devnet) |
+
+The 25% recipient received exactly 125,000 wrapped-SOL base units on the first claim and 129,165 additional units on the second, for a cumulative 254,165. The runner checked the recipient's actual token-account balance delta against the cumulative entitlement after each claim. It also collected remaining DBC fees after graduation.
+
+The final DBC buy initially returned an expiry error from confirmation, but finalized successfully on-chain. Its signature was reconciled before proceeding; the trade was not repeated. The runner now persists pending signed transactions and rebroadcasts the same bytes, rather than treating a confirmation timeout as permission to send a new trade. A subsequent completed-run check passed without sending new transactions and reverified both claims from transaction balance metadata.
+
+This validates the on-chain lifecycle with a fixture X identity and a test verifier attestation. Live OAuth, wallet linking and a real X post still need an acceptance test once the staging provider credentials are configured. No mainnet deployment or production configuration was changed.
