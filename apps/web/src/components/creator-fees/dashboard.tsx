@@ -214,11 +214,22 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               shared-fee token launches.
             </p>
           )}
-          {!recipient && account && !account.profile && (
+          {!status.lookupAvailable && (
             <p className="lp-notice">
-              Connect X in the top bar, then refresh to find your allocations.
+              X post verification is not available yet. Fee claims are paused.
             </p>
           )}
+          {!recipient && !status.bindingAvailable && (
+            <p className="lp-notice">X account linking is not available yet.</p>
+          )}
+          {!recipient &&
+            status.bindingAvailable &&
+            account &&
+            !account.profile && (
+              <p className="lp-notice">
+                Connect X in the top bar, then refresh to find your allocations.
+              </p>
+            )}
           {!recipient && account?.profile && !account.binding && (
             <div className="lp-panel cf-bind">
               <div>
@@ -230,7 +241,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               </div>
               <button
                 className="lp-primary"
-                disabled={loading}
+                disabled={!status.bindingAvailable || loading}
                 onClick={() => void bind()}
               >
                 Link wallet
@@ -308,6 +319,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
                         allocation={allocation}
                         balance={balance}
                         enabled={status.escrowAvailable}
+                        verificationAvailable={status.lookupAvailable}
                       />
                     )}
                   </div>
@@ -341,10 +353,12 @@ function ClaimFlow({
   allocation,
   balance,
   enabled,
+  verificationAvailable,
 }: {
   allocation: Allocation;
   balance: Balance;
   enabled: boolean;
+  verificationAvailable: boolean;
 }) {
   const app = useLaunchpad();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
@@ -371,6 +385,7 @@ function ClaimFlow({
     : 0;
   const expired = !!challenge && (!Number.isFinite(expires) || expires <= now);
   async function run(action: "start" | "verify" | "claim" | "collect") {
+    if (action !== "collect" && !verificationAvailable) return;
     setBusy(action);
     setError("");
     try {
@@ -465,6 +480,7 @@ function ClaimFlow({
           className="lp-primary"
           disabled={
             !enabled ||
+            !verificationAvailable ||
             !!busy ||
             !/^[0-9]+$/.test(balance.amountAtomic) ||
             BigInt(balance.amountAtomic) === 0n
@@ -507,7 +523,7 @@ function ClaimFlow({
               This post request expired.{" "}
               <button
                 className="cf-text-button"
-                disabled={!!busy}
+                disabled={!verificationAvailable || !!busy}
                 onClick={() => void run("start")}
               >
                 Create a new post
@@ -528,7 +544,9 @@ function ClaimFlow({
               {!verified ? (
                 <button
                   className="lp-secondary"
-                  disabled={!!busy || !tweetUrl.trim()}
+                  disabled={
+                    !verificationAvailable || !!busy || !tweetUrl.trim()
+                  }
                   onClick={() => void run("verify")}
                 >
                   {busy === "verify" ? (
@@ -543,7 +561,7 @@ function ClaimFlow({
                   </p>
                   <button
                     className="lp-primary"
-                    disabled={!ready || !!busy}
+                    disabled={!verificationAvailable || !ready || !!busy}
                     onClick={() => void run("claim")}
                   >
                     {busy === "claim"

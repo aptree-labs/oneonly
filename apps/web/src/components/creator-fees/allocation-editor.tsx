@@ -126,6 +126,12 @@ export function AllocationEditor({
                 "Fee sharing is being prepared for devnet. You can explore recipients, but shared-fee launches are not available yet."}
             </p>
           )}
+          {status && !status.lookupAvailable && (
+            <p className="lp-notice">X account search is not available yet.</p>
+          )}
+          {status && !status.bindingAvailable && (
+            <p className="lp-notice">X account linking is not available yet.</p>
+          )}
           <div className="cf-split" aria-label={`${total / 100}% allocated`}>
             {value.map((row, index) => (
               <span
@@ -230,7 +236,7 @@ export function AllocationEditor({
             type="button"
             className="lp-secondary"
             onClick={() => void addMe()}
-            disabled={loading || value.length >= 8}
+            disabled={!status?.bindingAvailable || loading || value.length >= 8}
           >
             Add my connected X account
           </button>

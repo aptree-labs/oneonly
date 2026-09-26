@@ -16,6 +16,7 @@ async function fixtures(
         enabled: true,
         network: "devnet",
         lookupAvailable: true,
+        bindingAvailable: true,
         escrowAvailable,
       },
     }),
@@ -264,6 +265,27 @@ test("a linked recipient must verify a new post before a claim can proceed", asy
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+  // Escrow readiness alone must not enable a claim without X post verification.
+  await page.route("**/api/creator-fees/status", (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        network: "devnet",
+        escrowAvailable: true,
+        lookupAvailable: false,
+        bindingAvailable: true,
+      },
+    }),
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Claim fees", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("X post verification is not available yet. Fee claims are paused."),
+  ).toBeVisible();
+  expect(claims).toBe(0);
+
 });
 
 test("recipient rankings keep different assets separate and mark partial coverage", async ({
@@ -329,4 +351,47 @@ test("recipient rankings keep different assets separate and mark partial coverag
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("X readiness remains visible when escrow is ready", async ({ page }) => {
+  await fixtures(page, true);
+  await page.route("**/api/creator-fees/status", (route) =>
+    route.fulfill({
+      json: {
+        enabled: true,
+        network: "devnet",
+        escrowAvailable: true,
+        lookupAvailable: false,
+        bindingAvailable: false,
+      },
+    }),
+  );
+  await page.goto("/app/create");
+  await page.getByRole("button", { name: /Share creator fees/ }).click();
+  await expect(
+    page.getByText("X account search is not available yet."),
+  ).toBeVisible();
+  await expect(
+    page.getByText("X account linking is not available yet."),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "Find an X account" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", { name: "Add my connected X account" }),
+  ).toBeDisabled();
+  await page.goto("/app/creator-fees");
+  await expect(
+    page.getByText(
+      "X post verification is not available yet. Fee claims are paused.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText("X account linking is not available yet."),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Connect X in the top bar, then refresh to find your allocations.",
+    ),
+  ).toHaveCount(0);
 });
