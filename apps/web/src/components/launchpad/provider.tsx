@@ -45,6 +45,7 @@ import {
   Moon,
   Building2,
   Trophy,
+  Coins,
   BookOpen,
   MessageCircle,
   Volume2,
@@ -410,6 +411,9 @@ function Shell({
     { href: "/app/create", label: "Launch a token", Icon: Rocket },
     { href: "/app/portfolio", label: "Your wallet", Icon: Wallet },
     { href: "/app/leaderboard", label: "Leaderboard", Icon: Trophy },
+    ...(network === "devnet"
+      ? [{ href: "/app/creator-fees", label: "Creator fees", Icon: Coins }]
+      : []),
     { href: "/app/office", label: "Retard Office", Icon: Building2 },
     { href: "/app/docs", label: "Docs", Icon: BookOpen },
   ];
@@ -502,7 +506,9 @@ function Shell({
           {network === "devnet" && (
             <div className="lp-devnet-banner" role="note">
               <strong>Devnet preview</strong>
-              <span>Test funds only. Tokens and balances have no real value.</span>
+              <span>
+                Test funds only. Tokens and balances have no real value.
+              </span>
             </div>
           )}
           <header className="lp-topbar">
@@ -518,11 +524,13 @@ function Shell({
                     ? "YOUR CORNER"
                     : pathname.includes("leaderboard")
                       ? "THE LEADERBOARD"
-                      : pathname.includes("office")
-                        ? "RETARD OFFICE"
-                        : pathname.includes("token/")
-                          ? "THE MARKET"
-                          : "THE WASTELAND"}
+                      : pathname.includes("creator-fees")
+                        ? "CREATOR FEES"
+                        : pathname.includes("office")
+                          ? "RETARD OFFICE"
+                          : pathname.includes("token/")
+                            ? "THE MARKET"
+                            : "THE WASTELAND"}
             </span>
             <div className="lp-topbar-actions">
               <button
@@ -602,9 +610,13 @@ function Shell({
                     : "Purchase confirmed"
                   : success.kind === "launch"
                     ? "Token launched"
-                    : success.kind === "claim"
-                      ? "Fees claimed"
-                      : "Transaction confirmed"}
+                    : success.kind === "creator-fee-collect"
+                      ? "Fees ready to claim"
+                      : ["claim", "creator-fee-claim"].includes(
+                            success.kind ?? "",
+                          )
+                        ? "Fees claimed"
+                        : "Transaction confirmed"}
               </strong>
               {success.kind === "launch" &&
                 success.details.firstBuy?.startsWith("None") && (
@@ -746,33 +758,48 @@ function Shell({
                       : "Check it. Then send it."}
               </h2>
               <dl>
-                {Object.entries(intent.details).map(([key, value]) => (
-                  <div key={key}>
-                    <dt>
-                      {(
-                        {
-                          minimumOutput: "Minimum received",
-                          expectedOutput: "Estimated received",
-                          priceReference: "USD reference time",
-                          input: "Maximum input",
-                          estimatedSpend: "Estimated spend",
-                          network: "Network",
-                          venue: "Trading venue",
-                          pool: "Pool address",
-                          networkCosts: "Network costs",
-                          priorityFee: "Priority fee",
-                          side: "Trade",
-                          ticker: "Ticker",
-                          slippage: "Slippage",
-                          action: "Action",
-                          nextStep: "Next step",
-                          conversionBalance: "Remaining balance",
-                        } as Record<string, string>
-                      )[key] ?? key}
-                    </dt>
-                    <dd title={value}>{formatReviewValue(key, value)}</dd>
-                  </div>
-                ))}
+                {Object.entries(intent.details)
+                  .filter(
+                    ([key]) =>
+                      ![
+                        "feeAllocation",
+                        "feeRecipients",
+                        "challengeId",
+                      ].includes(key),
+                  )
+                  .map(([key, value]) => (
+                    <div key={key}>
+                      <dt>
+                        {(
+                          {
+                            feeSharing: "Creator fee sharing",
+                            output: "Claim amount",
+                            destination: "Destination",
+                            post: "Verified post",
+                            receivedAs: "Received as",
+                            costs: "Network costs",
+                            minimumOutput: "Minimum received",
+                            expectedOutput: "Estimated received",
+                            priceReference: "USD reference time",
+                            input: "Maximum input",
+                            estimatedSpend: "Estimated spend",
+                            network: "Network",
+                            venue: "Trading venue",
+                            pool: "Pool address",
+                            networkCosts: "Network costs",
+                            priorityFee: "Priority fee",
+                            side: "Trade",
+                            ticker: "Ticker",
+                            slippage: "Slippage",
+                            action: "Action",
+                            nextStep: "Next step",
+                            conversionBalance: "Remaining balance",
+                          } as Record<string, string>
+                        )[key] ?? key}
+                      </dt>
+                      <dd title={value}>{formatReviewValue(key, value)}</dd>
+                    </div>
+                  ))}
               </dl>
               <p className="lp-muted">
                 You approve this exact transaction in your wallet. Network fees

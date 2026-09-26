@@ -10,7 +10,12 @@ const config: NextConfig = {
       "./public/brand/share-marker.woff",
     ],
   },
-  transpilePackages: ["@oneonly/core", "@oneonly/db", "@oneonly/protocol"],
+  transpilePackages: [
+    "@oneonly/core",
+    "@oneonly/db",
+    "@oneonly/protocol",
+    "@oneonly/fee-escrow",
+  ],
   serverExternalPackages: [
     "@electric-sql/pglite",
     "postgres",

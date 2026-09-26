@@ -1,3 +1,8 @@
+import {
+  prepareLaunchAllocation,
+  reconcileLaunchAllocation,
+} from "../creator-fees/launch";
+import { resolveFeeAllocation } from "../creator-fees/service";
 import { randomUUID } from "node:crypto";
 import { resolveProjectLinks } from "./project-links";
 import { Effect, Either } from "effect";
@@ -12,6 +17,7 @@ import {
 } from "@oneonly/core";
 import {
   getDatabase,
+  creatorFeePools,
   launchTokens,
   tickerClaims,
   tokenImages,
@@ -122,6 +128,9 @@ export async function launch(
   const data = validated.right,
     db = await getDatabase();
   const projectLinks = await resolveProjectLinks(wallet, data);
+  const feeRecipients = data.feeRecipients.length
+    ? await resolveFeeAllocation(data.feeRecipients)
+    : [];
   const [image] = await db
     .select({ id: tokenImages.id })
     .from(tokenImages)
@@ -181,6 +190,7 @@ export async function launch(
       undefined,
       {
         ...data,
+        feeRecipients: JSON.stringify(data.feeRecipients),
         rawConvertedAmount: conversion.quoteAmount,
         slippageBps: Math.floor(data.slippageBps / 2),
       },
@@ -205,6 +215,16 @@ export async function launch(
     amount,
     slippageBps: data.slippageBps,
   });
+  const feeAllocation = feeRecipients.length
+    ? await prepareLaunchAllocation(built.transaction, {
+        wallet,
+        pool: built.pool,
+        config: built.config,
+        mint: mint.publicKey.toBase58(),
+        quoteMint: asset.mint,
+        recipients: feeRecipients,
+      })
+    : undefined;
   // The uniqueness constraint is the authority, not a previous availability response.
   const reserved = await db.transaction(async (tx) => {
     await tx.insert(launchTokens).values({
@@ -244,6 +264,13 @@ export async function launch(
       id,
       {
         ticker: data.ticker,
+        ...(feeAllocation
+          ? {
+              feeAllocation,
+              feeSharing:
+                "Creator fees split permanently between the selected X accounts",
+            }
+          : {}),
         ...(hasFirstBuy
           ? {
               input: `${formatScaledUnits(amount, asset.decimals, multiplier)} ${data.quote}`,
@@ -281,7 +308,14 @@ export async function continueLaunch(wallet: string, id: string) {
   const data = funding.continuation!;
   const next = await launch(
     wallet,
-    { ...data, payment: data.quote },
+    {
+      ...data,
+      payment: data.quote,
+      feeRecipients:
+        typeof data.feeRecipients === "string"
+          ? JSON.parse(data.feeRecipients)
+          : [],
+    },
     BigInt(string(data.rawConvertedAmount)),
   );
   await (
@@ -341,6 +375,16 @@ export async function trade(wallet: string, input: Record<string, unknown>) {
 export async function claim(wallet: string, id: string, venue = "dbc") {
   await assertNetwork();
   const token = await tokenById(id);
+  if (process.env.ONEONLY_ENVIRONMENT === "staging" && NETWORK === "devnet") {
+    const [shared] = await (
+      await getDatabase()
+    )
+      .select()
+      .from(creatorFeePools)
+      .where(eq(creatorFeePools.tokenId, id))
+      .limit(1);
+    if (shared) fail("Claim your allocated share from Creator fees.", 409);
+  }
   if (token.creator !== wallet)
     fail("Only the creator can claim these fees.", 403);
   return prepareIntent(
@@ -462,7 +506,19 @@ export async function reconcile(
           pool = await client().state.getPool(token.pool);
         if (
           !pool ||
-          pool.poolState.creator.toBase58() !== wallet ||
+          pool.poolState.baseMint.toBase58() !== token.mint ||
+          pool.poolState.config.toBase58() !== token.config
+        )
+          fail("Waiting for verified pool state.", 503);
+        const expectedCreator = await reconcileLaunchAllocation(
+          token,
+          wallet,
+          intent.details.feeAllocation,
+          pool!.poolState.creator.toBase58(),
+        );
+        if (
+          !pool ||
+          pool.poolState.creator.toBase58() !== expectedCreator ||
           pool.poolState.baseMint.toBase58() !== token.mint ||
           pool.poolState.config.toBase58() !== token.config
         )
@@ -475,6 +531,16 @@ export async function reconcile(
             launchSignature: intent.signature,
           })
           .where(eq(launchTokens.id, token.id));
+      }
+      if (intent.kind === "creator-fee-claim" && intent.details.challengeId) {
+        const { reconcileCreatorFeeClaim } =
+          await import("../creator-fees/transactions");
+        const receipt = await reconcileCreatorFeeClaim(
+          wallet,
+          intent.details.challengeId,
+          intent.signature,
+        );
+        if (!receipt.confirmed) fail("Waiting for the fee claim receipt.", 503);
       }
       await db
         .update(transactionIntents)

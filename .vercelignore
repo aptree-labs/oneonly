@@ -7,3 +7,7 @@ node_modules
 **/.env*
 playwright-report
 test-results
+
+.local
+packages/fee-escrow/target
+packages/fee-escrow/tests/fixtures

@@ -46,3 +46,5 @@ export * from "./display";
 export * from "./trade-amount";
 
 export * from "./platform-token";
+
+export * from "./creator-fees";

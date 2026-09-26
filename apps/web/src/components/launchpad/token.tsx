@@ -19,7 +19,11 @@ type Trade = {
   wallet: string;
   signature: string;
 };
-export type Detail = Token & { trades: Trade[]; stale: boolean };
+export type Detail = Token & {
+  trades: Trade[];
+  stale: boolean;
+  feeSharing?: boolean;
+};
 const PriceChart = dynamic(() => import("./price-chart"), {
   ssr: false,
   loading: () => <div className="lp-chart-empty">Loading chart…</div>,
@@ -299,7 +303,15 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
                 </a>
               )}
             </div>
-            {app.wallet === token.creator && (
+            {token.feeSharing && (
+              <div className="lp-panel lp-graduation">
+                <h3>Shared creator fees</h3>
+                <Link href="/app/creator-fees" className="lp-secondary lp-full">
+                  View your fee allocations
+                </Link>
+              </div>
+            )}
+            {app.wallet === token.creator && !token.feeSharing && (
               <div className="lp-panel lp-graduation">
                 <h3>Your curve creator fees</h3>
                 <strong>

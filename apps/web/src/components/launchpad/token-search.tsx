@@ -1,4 +1,6 @@
 "use client";
+import { RecipientList } from "../creator-fees/recipients";
+import { useLaunchpad } from "./provider";
 import { PlatformBadge } from "./platform-token";
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -143,6 +145,7 @@ function SearchContents({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const { network } = useLaunchpad();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -211,8 +214,16 @@ function SearchContents({
         <Search size={21} aria-hidden="true" />
         <input
           ref={input}
-          aria-label="Search name, ticker, or contract address"
-          placeholder="Search name, ticker, or contract address"
+          aria-label={
+            network === "devnet"
+              ? "Search tokens or X fee recipients"
+              : "Search name, ticker, or contract address"
+          }
+          placeholder={
+            network === "devnet"
+              ? "Search tokens or @accounts"
+              : "Search name, ticker, or contract address"
+          }
           autoComplete="off"
           spellCheck={false}
           maxLength={100}
@@ -341,6 +352,9 @@ function SearchContents({
         </div>
       </div>
       <div className="lp-token-search-scroll" ref={list}>
+        {network === "devnet" && (
+          <RecipientList query={search} compact onChoose={onClose} />
+        )}
         <div role="status" className="lp-search-status" aria-live="polite">
           {busy ? (
             <>

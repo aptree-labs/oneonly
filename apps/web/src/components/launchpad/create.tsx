@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { AllocationEditor } from "../creator-fees/allocation-editor";
+import type { FeeRecipient } from "../creator-fees/client";
 import { Select } from "./select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { prepareTokenImage } from "@/lib/token-image";
@@ -54,6 +56,8 @@ export function CreateToken({
     [existingToken, setExistingToken] = useState<string | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [feeRecipients, setFeeRecipients] = useState<FeeRecipient[]>([]);
+  const [feeAllocationValid, setFeeAllocationValid] = useState(true);
   const imageSelection = useRef(0);
   useEffect(() => {
     api<Config>("config")
@@ -139,7 +143,7 @@ export function CreateToken({
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (imageBusy) return;
+    if (imageBusy || !feeAllocationValid) return;
     setBusy(true);
     setError("");
     try {
@@ -162,6 +166,14 @@ export function CreateToken({
         initialBuy: includeFirstBuy ? normalizeAmount(initialBuy) : "0",
         payment,
         slippageBps: Number(slippage) * 100,
+        ...(feeRecipients.length
+          ? {
+              feeRecipients: feeRecipients.map(({ xId, shareBps }) => ({
+                xId,
+                shareBps,
+              })),
+            }
+          : {}),
       });
       app.review(intent);
     } catch (e) {
@@ -359,6 +371,11 @@ export function CreateToken({
               </label>
             </div>
           </div>
+          <AllocationEditor
+            value={feeRecipients}
+            onChange={setFeeRecipients}
+            onValidity={setFeeAllocationValid}
+          />
           <div className="lp-section-heading lp-separated">
             <h2>The launch</h2>
             <span>First buy optional</span>
@@ -491,7 +508,11 @@ export function CreateToken({
           <button
             className="lp-primary lp-full"
             disabled={
-              busy || imageBusy || !enabled || availability !== "Available"
+              busy ||
+              imageBusy ||
+              !feeAllocationValid ||
+              !enabled ||
+              availability !== "Available"
             }
           >
             {busy ? (
