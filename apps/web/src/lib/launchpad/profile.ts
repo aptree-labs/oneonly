@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { getDatabase, walletProfiles, eq } from "@oneonly/db";
 import { signXLink } from "../x-link";
+import { xLinkStartOrigin } from "../deployment";
 import { tokenById } from "./transactions";
 import { rateLimit, fail } from "./auth";
 export async function walletProfile(wallet: string | null) {
@@ -47,6 +48,6 @@ export async function beginXLink(wallet: string, tokenId: string) {
     expires: Date.now() + 600_000,
   });
   return {
-    url: `https://oneonly.lol/api/auth/x?link=${encodeURIComponent(ticket)}`,
+    url: `${xLinkStartOrigin()}/api/auth/x?link=${encodeURIComponent(ticket)}`,
   };
 }

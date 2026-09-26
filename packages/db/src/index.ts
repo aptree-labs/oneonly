@@ -1,4 +1,4 @@
-import { runtimeDatabaseUrl } from "./connection-options";
+import { assertStagingDatabase, runtimeDatabaseUrl } from "./connection-options";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
 import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
@@ -43,6 +43,7 @@ export async function createLocalDatabase(dataDir?: string) {
   return { db, client };
 }
 async function connect() {
+  assertStagingDatabase(process.env);
   const databaseUrl =
     process.env.SOLANA_NETWORK === "mainnet-beta"
       ? process.env.MAINNET_DATABASE_URL

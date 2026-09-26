@@ -1,4 +1,6 @@
 import type { NextConfig } from "next";
+import { assertStagingEnvironment, isStaging } from "./src/lib/deployment";
+assertStagingEnvironment();
 const config: NextConfig = {
   devIndicators: false,
   outputFileTracingIncludes: {
@@ -19,7 +21,7 @@ const config: NextConfig = {
     return {
       // Keep the existing X app credentials and registered callback unchanged.
       beforeFiles:
-        process.env.ONEONLY_SURFACE === "app"
+        process.env.ONEONLY_SURFACE === "app" && !isStaging()
           ? [
               {
                 source: "/api/auth/x",
@@ -44,6 +46,9 @@ const config: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "X-Frame-Options", value: "DENY" },
+          ...(isStaging()
+            ? [{ key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" }]
+            : []),
         ],
       },
       {

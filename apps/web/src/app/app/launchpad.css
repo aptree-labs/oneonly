@@ -126,6 +126,21 @@
   color: var(--lp-text, var(--lp-ink));
   font-weight: 700;
 }
+.lp-devnet-banner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  padding: 0.65rem 1rem;
+  background: #e9ed9b;
+  color: #20291d;
+  font-size: 0.8rem;
+  text-align: center;
+}
+.lp-devnet-banner strong {
+  font-weight: 700;
+}
 .lp-workspace {
   margin-left: 208px;
   min-height: 100dvh;

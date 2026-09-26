@@ -1,6 +1,11 @@
 export type SolanaNetwork = "devnet" | "mainnet-beta";
 
-export function solanaNetwork(value: string | undefined): SolanaNetwork {
+export function solanaNetwork(
+  value: string | undefined,
+  environment?: string,
+): SolanaNetwork {
+  if (environment === "staging" && value !== "devnet")
+    throw new Error("Staging requires SOLANA_NETWORK=devnet.");
   if (value === undefined || value === "devnet") return "devnet";
   if (value === "mainnet-beta") return value;
   throw new Error("SOLANA_NETWORK must be devnet or mainnet-beta.");

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { site } from "@/lib/site";
+import { isStaging } from "@/lib/deployment";
 import "@fontsource/permanent-marker/latin-400.css";
 import "@fontsource/space-grotesk/latin-400.css";
 import "@fontsource/space-grotesk/latin-500.css";
@@ -35,7 +36,11 @@ export const metadata: Metadata = {
     description: site.description,
     images: [{ url: site.image, alt: site.imageAlt }],
   },
-  robots: { index: true, follow: true, "max-image-preview": "large" },
+  robots: {
+    index: !isStaging(),
+    follow: !isStaging(),
+    "max-image-preview": "large",
+  },
   appleWebApp: { title: site.name, capable: true, statusBarStyle: "default" },
   formatDetection: { telephone: false },
 };
@@ -51,7 +56,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
-        <Analytics />
+        {!isStaging() && <Analytics />}
       </body>
     </html>
   );

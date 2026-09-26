@@ -6,6 +6,12 @@ import {
   explorerUrl,
 } from "./network";
 
+it("prevents a staging runtime from selecting mainnet", () => {
+  expect(solanaNetwork("devnet", "staging")).toBe("devnet");
+  expect(() => solanaNetwork("mainnet-beta", "staging")).toThrow("devnet");
+  expect(() => solanaNetwork(undefined, "staging")).toThrow("devnet");
+});
+
 it("rejects ambiguous networks and keeps wallet chains distinct from genesis hashes", () => {
   expect(solanaNetwork(undefined)).toBe("devnet");
   expect(solanaNetwork("mainnet-beta")).toBe("mainnet-beta");

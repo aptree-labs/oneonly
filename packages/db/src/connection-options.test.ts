@@ -1,5 +1,32 @@
 import { expect, it } from "vitest";
-import { runtimeDatabaseUrl } from "./connection-options";
+import {
+  assertStagingDatabase,
+  runtimeDatabaseUrl,
+} from "./connection-options";
+
+it("refuses mainnet or a missing database at staging runtime", () => {
+  const env = {
+    ONEONLY_ENVIRONMENT: "staging",
+    SOLANA_NETWORK: "devnet",
+    DATABASE_URL: "postgres://user@staging.invalid/oneonly_staging",
+  };
+  expect(() => assertStagingDatabase(env)).not.toThrow();
+  for (const override of [
+    { SOLANA_NETWORK: "mainnet-beta" },
+    { DATABASE_URL: undefined },
+    { DATABASE_URL: "postgres://user@production.invalid/oneonly_mainnet" },
+    {
+      MAINNET_DATABASE_URL:
+        "postgres://user@production.invalid/oneonly_mainnet",
+    },
+  ])
+    expect(() => assertStagingDatabase({ ...env, ...override })).toThrow(
+      "isolated",
+    );
+  expect(() =>
+    assertStagingDatabase({ SOLANA_NETWORK: "mainnet-beta" }),
+  ).not.toThrow();
+});
 it("uses Neon pooling without changing the isolated database, TLS or credentials", () => {
   const url = new URL(
     runtimeDatabaseUrl(

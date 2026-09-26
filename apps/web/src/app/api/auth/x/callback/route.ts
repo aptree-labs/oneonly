@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { saveSignup } from "@oneonly/db";
 import { appUrl, oauthResult, oauthCookie } from "@/lib/oauth";
+import { xLinkReturnOrigin } from "@/lib/deployment";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   const state = request.nextUrl.searchParams.get("state");
@@ -71,7 +72,7 @@ export async function GET(request: NextRequest) {
       const response = NextResponse.redirect(
         new URL(
           `/api/launchpad/x-callback?profile=${encodeURIComponent(assertion)}`,
-          "https://app.oneonly.lol",
+          xLinkReturnOrigin(),
         ),
       );
       for (const name of ["x_state", "x_verifier", "x_app_link"])

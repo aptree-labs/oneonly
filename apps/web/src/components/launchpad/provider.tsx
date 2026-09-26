@@ -499,6 +499,12 @@ function Shell({
           </nav>
         </aside>
         <div className="lp-workspace">
+          {network === "devnet" && (
+            <div className="lp-devnet-banner" role="note">
+              <strong>Devnet preview</strong>
+              <span>Test funds only. Tokens and balances have no real value.</span>
+            </div>
+          )}
           <header className="lp-topbar">
             <span className="lp-mobile-network">
               {network === "mainnet-beta" ? "MAINNET" : "DEVNET"}

@@ -1,4 +1,5 @@
 import { readXLink } from "./x-link";
+import { xLinkReturnOrigin } from "./deployment";
 import { NextRequest, NextResponse } from "next/server";
 export function appUrl(request: NextRequest) {
   if (process.env.APP_URL) return process.env.APP_URL;
@@ -21,7 +22,7 @@ export function oauthResult(request: NextRequest, result: string) {
       "request",
     );
     destination = new URL(
-      `https://app.oneonly.lol${link.tokenId ? `/app/token/${link.tokenId}` : "/app"}?x=${result}${link.tokenId ? "#comments" : ""}`,
+      `${xLinkReturnOrigin()}${link.tokenId ? `/app/token/${link.tokenId}` : "/app"}?x=${result}${link.tokenId ? "#comments" : ""}`,
     );
   } catch {
     /* Ordinary early-access sign-in. */

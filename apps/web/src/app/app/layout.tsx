@@ -2,12 +2,13 @@ import { NETWORK } from "@oneonly/protocol";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { LaunchpadProvider } from "@/components/launchpad/provider";
+import { isStaging } from "@/lib/deployment";
 import "./launchpad.css";
 export const metadata: Metadata = {
   title: "Explore",
   metadataBase: new URL("https://oneonly.lol"),
   alternates: { canonical: "https://oneonly.lol" },
-  robots: { index: true, follow: true },
+  robots: { index: !isStaging(), follow: !isStaging() },
   description:
     "Discover, launch and trade tokens on One Only. Powered by Meteora on Solana.",
   twitter: {

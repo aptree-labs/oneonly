@@ -64,7 +64,10 @@ export {
   getPriceFromSqrtPrice,
 };
 export class ProtocolError extends Error {}
-export const NETWORK = solanaNetwork(process.env.SOLANA_NETWORK);
+export const NETWORK = solanaNetwork(
+  process.env.SOLANA_NETWORK,
+  process.env.ONEONLY_ENVIRONMENT,
+);
 export const PROGRAM = new PublicKey(
   "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
 );
