@@ -1,22 +1,20 @@
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ totals: vi.fn(), fees: vi.fn() }));
+const mocks = vi.hoisted(() => ({ totals: vi.fn(), snapshot: vi.fn() }));
 vi.mock("next/cache", () => ({ unstable_cache: (fn: unknown) => fn }));
 vi.mock("./price", () => ({ prices: async () => null }));
 vi.mock("@oneonly/db", () => ({
   getDatabase: async () => ({}),
   officeTotals: mocks.totals,
 }));
-vi.mock("@oneonly/protocol", () => ({
-  NETWORK: "mainnet-beta",
-  client: () => ({ state: { getPoolFeeBreakdown: mocks.fees } }),
+vi.mock("@oneonly/protocol", () => ({ NETWORK: "mainnet-beta" }));
+vi.mock("./office-fee-snapshot", () => ({
+  readCurveFeeSnapshot: mocks.snapshot,
 }));
 import { readOfficeFees } from "./office";
-const bn = (n: string) => ({
-  isZero: () => BigInt(n) === 0n,
-  toString: () => n,
-});
 const pool = (id: string) => ({
-  pool: id,
+  id,
+  pool: `pool-${id}`,
+  config: "shared-config",
   quote: "SOL",
   quoteMint: "sol-mint",
   quoteDecimals: 9,
@@ -24,37 +22,46 @@ const pool = (id: string) => ({
 beforeEach(() => {
   vi.resetAllMocks();
 });
-it("aggregates native earned revenue separately from claimed creator fees, preserving missing-pool coverage", async () => {
-  mocks.totals.mockResolvedValue({
-    launches: 3,
-    graduations: 1,
-    pools: [pool("a"), pool("b"), pool("c")],
-  });
-  mocks.fees.mockImplementation(async (id: string) => {
-    if (id === "c") throw new Error("RPC unavailable");
-    return {
-      partner: { totalBaseFee: bn("0"), totalQuoteFee: bn("1000000000") },
-      creator: {
-        totalBaseFee: bn("0"),
-        claimedQuoteFee: bn(id === "a" ? "500000000" : "-1"),
-      },
-    };
-  });
+it("aggregates complete snapshots with earned revenue separate from paid creator claims", async () => {
+  const pools = [pool("a"), pool("b"), pool("c")];
+  mocks.totals.mockResolvedValue({ launches: 3, graduations: 1, pools });
+  // Rows deliberately arrive in another order: totals are matched by token id.
+  // Unclaimed creator earnings are not creator payouts.
+  mocks.snapshot.mockResolvedValue([
+    { id: "c", revenue: 250000000n, creatorPayouts: 0n },
+    { id: "a", revenue: 1000000000n, creatorPayouts: 500000000n },
+    { id: "b", revenue: 1000000000n, creatorPayouts: 0n },
+  ]);
   const data = await readOfficeFees();
-  expect(data.checked).toBe(2);
+  expect(mocks.snapshot).toHaveBeenCalledWith(pools);
+  expect(data.checked).toBe(3);
   expect(data.pools).toBe(3);
   expect(data.graduated).toBe(1);
-  expect(Number(data.assets[0].revenue)).toBe(2);
-  expect(Number(data.assets[0].creatorPayouts)).toBe(0.5);
-});
-it("does not show zero when all pool reads fail", async () => {
-  mocks.totals.mockResolvedValue({
-    launches: 1,
-    graduations: 0,
-    pools: [pool("a")],
+  expect(data.assets).toEqual([
+    {
+      symbol: "SOL",
+      mint: "sol-mint",
+      revenue: "2.25",
+      creatorPayouts: "0.5",
+    },
+  ]);
+  expect(data.usd).toEqual({
+    revenue: null,
+    creatorPayouts: null,
+    complete: false,
   });
-  mocks.fees.mockRejectedValue(new Error("RPC unavailable"));
-  const data = await readOfficeFees();
-  expect(data.checked).toBe(0);
-  expect(data.assets).toEqual([]);
+});
+it.each([
+  ["one account is unavailable", "A curve fee account is unavailable"],
+  ["all RPC reads fail", "RPC unavailable"],
+])("refuses a replacement total when %s", async (_scenario, message) => {
+  mocks.totals.mockResolvedValue({
+    launches: 3,
+    graduations: 0,
+    pools: [pool("a"), pool("b"), pool("c")],
+  });
+  mocks.snapshot.mockRejectedValue(new Error(message));
+  // The snapshot reader rejects partial batches. Propagate that failure so the
+  // cache can retain its last complete result, rather than publish less or zero.
+  await expect(readOfficeFees()).rejects.toThrow(message);
 });

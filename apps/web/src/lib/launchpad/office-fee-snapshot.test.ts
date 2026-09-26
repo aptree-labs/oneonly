@@ -13,6 +13,7 @@ it("keeps lifetime revenue and paid claims separate from outstanding fees", () =
   const state = { metrics: { totalTradingBaseFee: 0n, totalTradingQuoteFee: 10001n }, creatorQuoteFee: 1500n };
   expect(curveFeeAmounts(state, { creatorTradingFeePercentage: 50 })).toEqual({ revenue: 5001n, creatorPayouts: 3500n });
   expect(curveFeeAmounts({ ...state, creatorQuoteFee: 0n }, { creatorTradingFeePercentage: 50 })).toEqual({ revenue: 5001n, creatorPayouts: 5000n });
+  expect(curveFeeAmounts({ ...state, creatorQuoteFee: 6000n }, { creatorTradingFeePercentage: 50 })).toEqual({ revenue: 5001n, creatorPayouts: 0n });
 });
 it("batches shared configs and refuses a partial snapshot instead of returning a smaller total", async () => {
   const key = PublicKey.default.toBase58();

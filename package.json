@@ -18,7 +18,8 @@
     "assets:signup": "node scripts/prepare-signup-assets.mjs",
     "check:launch": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/check-launch-readiness.ts",
     "test:graduation": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/smoke-graduation-devnet.ts",
-    "test:indexer": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/smoke-indexer-devnet.ts"
+    "test:indexer": "node --import ./packages/db/node_modules/tsx/dist/loader.mjs scripts/smoke-indexer-devnet.ts",
+    "test:fee-escrow": "CREATOR_FEE_RUNTIME_TESTS=true vitest run packages/fee-escrow/tests --maxWorkers=1"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",

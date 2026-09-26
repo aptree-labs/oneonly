@@ -1,0 +1,21 @@
+{
+  "name": "@oneonly/fee-escrow",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@solana/web3.js": "^1.98.4",
+    "@solana/spl-token": "^0.4.14"
+  },
+  "devDependencies": {
+    "litesvm": "1.4.1",
+    "@solana/kit": "^8.0.0",
+    "@meteora-ag/dynamic-bonding-curve-sdk": "1.5.12",
+    "@meteora-ag/cp-amm-sdk": "1.4.8",
+    "bn.js": "^5.2.2",
+    "@types/bn.js": "^5.2.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

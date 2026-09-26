@@ -1,3 +1,4 @@
+import { validateFeeRecipients } from "./creator-fees";
 import { Data, Effect, Schema } from "effect";
 import { isReservedPlatformTicker } from "./platform-token";
 export const TOKEN_SUPPLY = 1_000_000_000;
@@ -187,6 +188,7 @@ const LaunchInput = Schema.Struct({
   imageId: Schema.String,
   quote: Schema.String,
   initialBuy: Schema.optional(Schema.String),
+  feeRecipients: Schema.optional(Schema.Unknown),
   payment: Schema.optional(Schema.String),
   slippageBps: Schema.Number,
 });
@@ -252,6 +254,7 @@ export const validateLaunch = (input: unknown) =>
           return {
             ...data,
             initialBuy,
+            feeRecipients: validateFeeRecipients(data.feeRecipients),
             ticker,
             name,
             description,

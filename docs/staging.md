@@ -45,6 +45,6 @@ For migrations, use the staging database's direct/unpooled URL and the committed
 
 Staging OAuth uses its own callback at `https://staging.oneonly.lol/api/auth/x/callback`, with `X_CLIENT_ID`, `X_CLIENT_SECRET`, and a separate `X_LINK_SECRET`. Register that callback in the X developer application before enabling linking. Production continues using its existing callback/broker path.
 
-The proposed fee feature additionally needs `TWITTERAPI_IO_API_KEY`. Store secrets in Vercel, never in Git or chat. Adding these variables does not by itself implement escrow or per-claim post verification.
+The creator-fee preview additionally needs `TWITTERAPI_IO_API_KEY`. Store secrets in Vercel, never in Git or chat. Adding these variables does not by itself implement escrow or per-claim post verification.
 
-See [the X fee-sharing plan](./x-fee-sharing-plan.md) for the escrow architecture, fresh-post requirement on every claim, verification safeguards, and staged rollout. That feature is not part of the initial staging infrastructure deployment.
+See [the implemented escrow preview](./x-fee-escrow.md) and [HTTP API](./x-fee-api.md) for the current flow and configuration. The interface and server implementation are available in the feature branch; enabling payouts still requires a funded devnet program deployment, a successful live lifecycle check, and working staging X credentials. The [original plan](./x-fee-sharing-plan.md) records the architecture and rollout criteria.

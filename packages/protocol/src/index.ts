@@ -666,3 +666,5 @@ export async function quoteProgram(mint: PublicKey) {
 }
 
 export { verifiedPurchase } from "./purchase";
+
+export { appendFeeAllocation, feeMarket, buildFeeCollection } from "./fee-escrow";

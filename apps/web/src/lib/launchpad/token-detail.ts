@@ -1,5 +1,12 @@
 import { cache } from "react";
-import { getDatabase, poolSnapshots, tokenTrades, eq, desc } from "@oneonly/db";
+import {
+  getDatabase,
+  poolSnapshots,
+  tokenTrades,
+  creatorFeePools,
+  eq,
+  desc,
+} from "@oneonly/db";
 import { quoteAssets, quoteMultiplier } from "@oneonly/protocol";
 import { tokenById } from "./transactions";
 import { refreshSnapshot } from "./indexer";
@@ -41,8 +48,17 @@ export async function tokenDetail(id: string, live = false) {
     live ? refresh(token).catch(() => null) : null,
   ]);
   const current = fresh ?? saved[0] ?? null;
+  const feePools =
+    process.env.ONEONLY_ENVIRONMENT === "staging" && token.network === "devnet"
+      ? await db
+          .select({ tokenId: creatorFeePools.tokenId })
+          .from(creatorFeePools)
+          .where(eq(creatorFeePools.tokenId, id))
+          .limit(1)
+      : [];
   const value = {
     ...token,
+    feeSharing: feePools.length > 0,
     marketCapUsd: marketValue(token, current, references, quoteAssets()),
     priceUsd: marketValue(
       token,

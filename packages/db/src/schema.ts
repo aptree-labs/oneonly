@@ -224,3 +224,5 @@ export const walletProfiles = pgTable("wallet_profiles", {
     .defaultNow()
     .notNull(),
 });
+
+export * from "./creator-fees-schema";

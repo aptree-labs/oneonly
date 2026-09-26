@@ -1,0 +1,6 @@
+[programs.devnet]
+oneonly_fee_escrow = "BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4"
+
+[provider]
+cluster = "devnet"
+wallet = "../../.local/fee-escrow/deployer.json"
