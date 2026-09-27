@@ -1,5 +1,5 @@
-import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { PLATFORM_TOKEN_MINT, HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
+import { and, asc, desc, eq, gte, lt, notInArray, sql } from "drizzle-orm";
 import {
   launchTokens,
   poolSnapshots,
@@ -136,6 +136,9 @@ export async function marketListings(
       and(
         eq(launchTokens.network, options.network),
         eq(launchTokens.status, "active"),
+        options.network === "mainnet-beta"
+          ? notInArray(launchTokens.id, [...HIDDEN_MAINNET_TOKEN_IDS])
+          : undefined,
         pair,
         options.age && options.age !== "All"
           ? gte(

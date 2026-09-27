@@ -1,4 +1,4 @@
-import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
+import { PLATFORM_TOKEN_MINT, HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
@@ -337,4 +337,22 @@ it("does not mark a mixed-price subtotal complete even with fully indexed curve 
   expect(row.volumeUsd24h).toBe(200);
   expect(row.volumeUnpricedTrades).toBe(1);
   expect(row.volumeComplete).toBe(false);
+});
+
+it("excludes moderated mainnet tokens from listings, counts and exact searches before pagination", async () => {
+  const hidden = { ...tokens[0], id: HIDDEN_MAINNET_TOKEN_IDS[0], network: "mainnet-beta", ticker: "ONLYONE", name: "Only One", mint: "moderated-mint", pool: "moderated-pool", activatedAt: now };
+  await local.db.insert(launchTokens).values(hidden);
+  for (const sort of ["newest", "volume", "market-cap", "recent-buys", "oldest", "relevance"] as const) {
+    const first = await marketListings(local.db, { ...options, network: "mainnet-beta", sort });
+    const second = await marketListings(local.db, { ...options, network: "mainnet-beta", sort, page: 1 });
+    expect(first.total).toBe(26);
+    expect(first.tokens).toHaveLength(24);
+    expect(second.tokens).toHaveLength(2);
+    expect([...first.tokens, ...second.tokens].some((t) => t.id === hidden.id)).toBe(false);
+  }
+  for (const search of [hidden.ticker, hidden.mint]) {
+    const result = await marketListings(local.db, { ...options, network: "mainnet-beta", search });
+    expect(result.tokens).toEqual([]);
+    expect(result.total).toBe(0);
+  }
 });

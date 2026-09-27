@@ -208,7 +208,7 @@ export const validateLaunch = (input: unknown) =>
           if (isReservedPlatformTicker(ticker))
             throw new LaunchError({
               message:
-                "ONEONLY and similar tickers are reserved for the official One Only token.",
+                "ONEONLY, ONLYONE and similar tickers are reserved for the official One Only token.",
               status: 400,
             });
           if (name.length < 1 || new TextEncoder().encode(name).length > 32)

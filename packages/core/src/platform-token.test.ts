@@ -21,10 +21,21 @@ describe("official platform identity", () => {
     "ONEONL",
     "ONEONLLY",
     "ONEONLX",
+    "ONLYONE",
+    "$ only one",
+    "0NLY0N3",
+    "ON1YONE",
+    "ONLY1",
+    "0nly1",
+    "ONLYONE2",
+    "XONLYONE",
+    "ONLYON",
+    "ONLYONNE",
+    "ONLYONX",
   ])("reserves %s", (ticker) => {
     expect(isReservedPlatformTicker(ticker)).toBe(true);
   });
-  it.each(["ONE", "ONLY", "GIDDY", "SOL", "ONETWO", "HOMER", "JUP"])(
+  it.each(["ONE", "ONLY", "GIDDY", "SOL", "ONETWO", "HOMER", "JUP", "ONLYLOVE"])(
     "does not reserve unrelated ticker %s",
     (ticker) => {
       expect(isReservedPlatformTicker(ticker)).toBe(false);
@@ -43,7 +54,7 @@ describe("official platform identity", () => {
       ),
     ).toBe(false);
   });
-  it.each(["ONEONLY", "1ONLY", "10NLY"])(
+  it.each(["ONEONLY", "1ONLY", "10NLY", "ONLYONE", "ONLY1", "0NLY0NE", "ONLYONE2"])(
     "rejects a server-side launch for %s even without a ticker claim",
     async (ticker) => {
       await expect(

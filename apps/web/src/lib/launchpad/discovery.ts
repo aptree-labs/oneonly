@@ -75,7 +75,7 @@ async function readListings(
     }),
   );
 }
-const cachedListings = unstable_cache(readListings, ["discovery-listings-v3"], {
+const cachedListings = unstable_cache(readListings, ["discovery-listings-v4"], {
   revalidate: 5,
   tags: [tag],
 });
