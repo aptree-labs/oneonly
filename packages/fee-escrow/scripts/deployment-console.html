@@ -11,8 +11,8 @@
       <p class="eyebrow">ONEONLY / LOCAL DEVNET REHEARSAL</p>
       <h1>Your wallet. Every approval.</h1>
       <p>
-        Review the build and spending limits, then approve one deployment step
-        at a time in Jupiter.
+        Review the build and spending limits, then approve bounded upload
+        batches in Jupiter. Creation and deployment stay separate.
       </p>
       <div id="message" role="status" aria-live="polite">
         Loading local plan…
@@ -29,6 +29,11 @@
         <h2>Progress</h2>
         <p id="progress">Reading finalized state…</p>
         <dl id="costs"></dl>
+        <label
+          ><input id="batch" type="checkbox" disabled /> Approve up to 16 upload
+          writes together</label
+        >
+        <p id="batch-status">Connect Jupiter to check batch-signing support.</p>
         <div class="actions">
           <button id="connect">Connect Jupiter</button
           ><button id="next" disabled>Review next step</button

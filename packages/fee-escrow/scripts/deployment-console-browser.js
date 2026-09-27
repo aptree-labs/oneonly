@@ -19,7 +19,8 @@ let state,
   wallet,
   account,
   prepared,
-  busy = false;
+  busy = false,
+  batchSupported = false;
 const encode = (bytes) =>
   btoa(Array.from(bytes, (byte) => String.fromCharCode(byte)).join(""));
 const decode = (value) => Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
@@ -62,6 +63,7 @@ function controls() {
   $("connect").disabled = busy;
   $("cancel").disabled = busy;
   $("refresh").disabled = busy;
+  $("batch").disabled = busy || !batchSupported;
 }
 async function refresh() {
   state = await api("status");
@@ -92,7 +94,7 @@ async function refresh() {
   $("progress").textContent = state.complete
     ? "Deployment verified: exact build and wallet authority match."
     : state.pending
-      ? `Waiting for finality: ${state.pending.kind}.`
+      ? `Waiting for finality: ${state.pending.count ?? 1} transaction(s).`
       : `${state.missingChunks} upload chunks remaining. Next: ${state.next?.kind || "none"}.`;
   controls();
 }
@@ -131,10 +133,21 @@ $("connect").onclick = () =>
       throw new Error(
         "Select the nominated deployment wallet with devnet support in Jupiter.",
       );
+    const feature = wallet.features["solana:signTransaction"];
+    batchSupported =
+      feature.version === "1.0.0" &&
+      feature.supportedTransactionVersions?.includes("legacy") &&
+      account.features?.includes("solana:signTransaction");
+    $("batch").checked = batchSupported;
+    $("batch-status").textContent = batchSupported
+      ? "Up to 16 independent upload writes per approval. Your wallet may show each transaction."
+      : "Batch signing is not advertised by this wallet. Single-step approvals remain available.";
     message("Jupiter connected. Review the plan before continuing.");
   });
 async function prepare(recover) {
-  prepared = await api(recover ? "recover" : "prepare");
+  prepared = await api(recover ? "recover" : "prepare", {
+    batchSize: batchSupported && $("batch").checked ? 16 : 1,
+  });
   if (prepared.complete) {
     prepared = null;
     await refresh();
@@ -143,7 +156,16 @@ async function prepare(recover) {
   }
   rows("step", [
     ["Action", prepared.kind],
-    ["Exact message SHA256", prepared.messageSha256],
+    ["Transactions", prepared.count ?? 1],
+    [
+      "Exact message SHA256",
+      (prepared.transactions ?? [prepared])
+        .map(
+          (item) =>
+            `${item.offset === undefined ? item.kind : `Offset ${item.offset}`}: ${item.messageSha256}`,
+        )
+        .join("\n"),
+    ],
     ["Network fee", `${prepared.feeLamports} lamports`],
     ["Maximum account funding", `${prepared.maximumFundingLamports} lamports`],
     ["New reserved budget", `${prepared.reservedLamports} lamports`],
@@ -165,18 +187,38 @@ $("sign").onclick = () =>
     if (!prepared || !account)
       throw new Error("Prepare a step and connect the nominated wallet first");
     const approvedStep = prepared;
-    const result = await wallet.features[
-      "solana:signTransaction"
-    ].signTransaction({
-      account,
-      chain: "solana:devnet",
-      transaction: decode(approvedStep.transaction),
-    });
-    if (!result[0]?.signedTransaction)
-      throw new Error("Jupiter did not return a signed transaction");
+    const items = approvedStep.transactions ?? [approvedStep];
+    if (items.length > 1 && !batchSupported)
+      throw new Error(
+        "Batch signing is unavailable. Cancel and choose single-step mode.",
+      );
+    let result;
+    try {
+      result = await wallet.features["solana:signTransaction"].signTransaction(
+        ...items.map((item) => ({
+          account,
+          chain: "solana:devnet",
+          transaction: decode(item.transaction),
+        })),
+      );
+    } catch (error) {
+      throw new Error(
+        items.length > 1
+          ? "Batch approval was not completed. Nothing was submitted. Retry the batch, or cancel and uncheck batch signing for single-step approvals."
+          : error.message || "Wallet approval was not completed",
+      );
+    }
+    if (
+      !Array.isArray(result) ||
+      result.length !== items.length ||
+      result.some((item) => !item?.signedTransaction)
+    )
+      throw new Error(
+        "Wallet returned an incomplete batch. Nothing was submitted. Cancel and choose single-step mode if needed.",
+      );
     const submitted = await api("submit", {
       id: approvedStep.id,
-      transaction: encode(result[0].signedTransaction),
+      transactions: result.map((item) => encode(item.signedTransaction)),
     });
     prepared = null;
     $("approval").hidden = true;
@@ -202,6 +244,12 @@ $("rebroadcast").onclick = () =>
     await refresh();
   });
 $("reviewed").onchange = controls;
+$("batch").onchange = () => {
+  if (busy) return;
+  prepared = null;
+  $("approval").hidden = true;
+  controls();
+};
 $("recovery-check").onchange = controls;
 run(async () => {
   if (!capability)

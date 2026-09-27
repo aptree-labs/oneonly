@@ -1,3 +1,4 @@
+import { prepareDeploymentBatch } from "../src/deployment";
 import { beforeEach, expect, it, vi } from "vitest";
 import {
   Keypair,
@@ -278,4 +279,52 @@ it("requires unchanged fully signed messages from the external wallet", async ()
       wallet.publicKey,
     ),
   ).toThrow("altered");
+});
+
+it("batches only independent missing writes with one shared expiry and exact artifact offsets", async () => {
+  const account = bufferInfo();
+  accounts.set(manifest.buffer, account);
+  artifact.subarray(900, 1800).copy(account.data, 37 + 900);
+  const batch = await prepareDeploymentBatch({
+    rpc,
+    manifest,
+    artifact,
+    localKeys: { program, buffer },
+    batchSize: 16,
+  });
+  expect(batch.items.map((item) => item.step)).toEqual([
+    { kind: "write", offset: 0 },
+    { kind: "write", offset: 1800 },
+  ]);
+  expect(rpc.getLatestBlockhash).toHaveBeenCalledTimes(1);
+  expect(
+    new Set(batch.items.map((item) => item.transaction.recentBlockhash)).size,
+  ).toBe(1);
+  for (const item of batch.items) {
+    expect(item.lastValidBlockHeight).toBe(200);
+    const write = item.transaction.instructions[2];
+    const offset = write.data.readUInt32LE(4);
+    expect(write.data.subarray(16)).toEqual(
+      artifact.subarray(offset, offset + 900),
+    );
+  }
+  accounts.clear();
+  const create = await prepareDeploymentBatch({
+    rpc,
+    manifest,
+    artifact,
+    localKeys: { program, buffer },
+    batchSize: 16,
+  });
+  expect(create.items).toHaveLength(1);
+  expect(create.items[0].step.kind).toBe("create-buffer");
+  await expect(
+    prepareDeploymentBatch({
+      rpc,
+      manifest,
+      artifact,
+      localKeys: { program, buffer },
+      batchSize: 17,
+    }),
+  ).rejects.toThrow("between 1 and 16");
 });

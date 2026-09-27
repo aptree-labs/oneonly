@@ -31,7 +31,8 @@ import {
   validateDeploymentManifest,
   inspectDeployment,
   deploymentCosts,
-  prepareNextDeployment,
+  prepareDeploymentBatch,
+  MAX_WRITE_BATCH,
   prepareBufferRecovery,
   assertDeploymentWalletSignature,
 } from "../src/deployment";
@@ -44,6 +45,8 @@ export type ConsoleRpc = DeploymentRpc &
   };
 type Entry = {
   kind: string;
+  batchId?: string;
+  offset?: number;
   signature: string;
   signedTransaction: string;
   lastValidBlockHeight: number;
@@ -96,7 +99,7 @@ async function body(request: IncomingMessage) {
   let bytes = 0;
   for await (const chunk of request) {
     bytes += chunk.length;
-    if (bytes > 8192) throw new Error("Request too large");
+    if (bytes > 65536) throw new Error("Request too large");
     chunks.push(Buffer.from(chunk));
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
@@ -188,75 +191,91 @@ export async function startDeploymentConsole(input: {
     const capability = randomBytes(32).toString("hex");
     let origin = "",
       busy = false;
-    let prepared: {
-      id: string;
+    type PreparedItem = {
       kind: string;
+      offset?: number;
       bytes: string;
       messageHash: string;
       lastValidBlockHeight: number;
       reserve: bigint;
+      fee: number;
+      funding: bigint;
+    };
+    let prepared: {
+      id: string;
+      items: PreparedItem[];
+      futureAllowance: bigint;
     } | null = null;
     const persist = () => savePrivateJson(journalPath, journal);
     const spent = () =>
       journal.entries.reduce((n, e) => n + BigInt(e.reservedLamports), 0n);
-    const pending = () =>
-      [...journal.entries].reverse().find((e) => e.state === "pending");
+    const pendingItems = () =>
+      journal.entries.filter((e) => e.state === "pending");
+    const pending = () => pendingItems()[0];
     async function refreshPending() {
       if ((await rpc.getGenesisHash()) !== manifest.genesis)
         throw new Error("RPC network changed");
-      const item = pending();
-      if (!item) return;
-      const status = (
-        await rpc.getSignatureStatuses([item.signature], {
-          searchTransactionHistory: true,
-        })
-      ).value[0];
-      if (status?.confirmationStatus === "finalized") {
-        const receipt = await rpc.getTransaction(item.signature, {
-          commitment: "finalized",
-          maxSupportedTransactionVersion: 0,
-        });
-        if (
-          !receipt?.meta ||
-          !Number.isSafeInteger(receipt.meta.fee) ||
-          receipt.meta.fee < 0
+      const items = pendingItems();
+      if (!items.length) return;
+      const statuses = (
+        await rpc.getSignatureStatuses(
+          items.map((item) => item.signature),
+          { searchTransactionHistory: true },
         )
-          throw new Error(
-            "Finalized fee receipt is unavailable. Stop until accounting can be verified.",
-          );
-        const pre = receipt.meta.preBalances[0],
-          post = receipt.meta.postBalances[0];
-        if (
-          !Number.isSafeInteger(pre) ||
-          !Number.isSafeInteger(post) ||
-          pre < 0 ||
-          post < 0
-        )
-          throw new Error("Invalid finalized wallet balance receipt");
-        const message = receipt.transaction.message;
-        const payer = message.getAccountKeys().get(0);
-        if (payer?.toBase58() !== manifest.wallet)
-          throw new Error("Finalized receipt fee payer mismatch");
-        item.actualFeeLamports = String(receipt.meta.fee);
-        item.netAccountFundingLamports = String(
-          BigInt(pre) - BigInt(post) - BigInt(receipt.meta.fee),
+      ).value;
+      if (statuses.length !== items.length)
+        throw new Error(
+          "Incomplete transaction status response; no journal entries changed",
         );
-        item.state = status.err ? "failed" : "finalized";
-        persist();
-        if (
-          BigInt(receipt.meta.fee) >
-            BigInt(manifest.maxFeePerTransactionLamports) ||
-          BigInt(pre) - BigInt(post) > BigInt(item.reservedLamports)
-        )
-          throw new Error(
-            "Finalized spend exceeded the approved reservation. Stop and investigate.",
+      for (const [index, item] of items.entries()) {
+        const status = statuses[index];
+        if (status?.confirmationStatus === "finalized") {
+          const receipt = await rpc.getTransaction(item.signature, {
+            commitment: "finalized",
+            maxSupportedTransactionVersion: 0,
+          });
+          if (
+            !receipt?.meta ||
+            !Number.isSafeInteger(receipt.meta.fee) ||
+            receipt.meta.fee < 0
+          )
+            throw new Error(
+              "Finalized fee receipt is unavailable. Stop until accounting can be verified.",
+            );
+          const pre = receipt.meta.preBalances[0],
+            post = receipt.meta.postBalances[0];
+          if (
+            !Number.isSafeInteger(pre) ||
+            !Number.isSafeInteger(post) ||
+            pre < 0 ||
+            post < 0
+          )
+            throw new Error("Invalid finalized wallet balance receipt");
+          const message = receipt.transaction.message;
+          const payer = message.getAccountKeys().get(0);
+          if (payer?.toBase58() !== manifest.wallet)
+            throw new Error("Finalized receipt fee payer mismatch");
+          item.actualFeeLamports = String(receipt.meta.fee);
+          item.netAccountFundingLamports = String(
+            BigInt(pre) - BigInt(post) - BigInt(receipt.meta.fee),
           );
-      } else if (
-        !status &&
-        (await rpc.getBlockHeight("finalized")) > item.lastValidBlockHeight
-      ) {
-        item.state = "expired";
-        persist();
+          item.state = status.err ? "failed" : "finalized";
+          persist();
+          if (
+            BigInt(receipt.meta.fee) >
+              BigInt(manifest.maxFeePerTransactionLamports) ||
+            BigInt(pre) - BigInt(post) > BigInt(item.reservedLamports)
+          )
+            throw new Error(
+              "Finalized spend exceeded the approved reservation. Stop and investigate.",
+            );
+        } else if (
+          !status &&
+          (await rpc.getBlockHeight("finalized")) > item.lastValidBlockHeight
+        ) {
+          item.state = "expired";
+          persist();
+        }
       }
     }
     async function status() {
@@ -287,12 +306,16 @@ export async function startDeploymentConsole(input: {
           (e) => e.actualFeeLamports !== undefined,
         ),
         pending: pending()
-          ? { kind: pending()!.kind, signature: pending()!.signature }
+          ? {
+              kind: pending()!.kind,
+              signature: pending()!.signature,
+              count: pendingItems().length,
+            }
           : null,
         lastState: journal.entries.at(-1)?.state ?? null,
       };
     }
-    async function prepare(recover: boolean) {
+    async function prepare(recover: boolean, batchSize = 1) {
       await refreshPending();
       if (pending())
         throw new Error(
@@ -344,47 +367,98 @@ export async function startDeploymentConsole(input: {
         throw new Error(
           "Reserved attempts plus remaining deployment allowance exceed the total budget. Review a new plan.",
         );
-      const result = recover
+      const recovery = recover
         ? await prepareBufferRecovery(rpc, manifest)
-        : await prepareNextDeployment({ rpc, manifest, artifact, localKeys });
-      if (!result || ("complete" in result && result.complete)) {
+        : null;
+      const batch = recover
+        ? null
+        : await prepareDeploymentBatch({
+            rpc,
+            manifest,
+            artifact,
+            localKeys,
+            batchSize,
+          });
+      const results = recovery
+        ? [
+            {
+              ...recovery,
+              step: { kind: "recover-buffer" as const, offset: undefined },
+            },
+          ]
+        : (batch?.items ?? []);
+      if (!results.length) {
         prepared = null;
         return { complete: true };
       }
-      const kind = "step" in result ? result.step.kind : "recover-buffer";
-      const funding =
-        kind === "create-buffer"
-          ? BigInt(costs.bufferRent)
-          : kind === "deploy"
-            ? BigInt(costs.programRent + costs.programDataRent)
-            : 0n;
-      // Keep failed/expired reservations too: never silently replenish the approval budget.
-      const reserve = funding + BigInt(result.feeLamports);
+      const items: PreparedItem[] = results.map((result) => {
+        const kind = result.step.kind;
+        const funding =
+          kind === "create-buffer"
+            ? BigInt(costs.bufferRent)
+            : kind === "deploy"
+              ? BigInt(costs.programRent) + BigInt(costs.programDataRent)
+              : 0n;
+        return {
+          kind,
+          offset: "offset" in result.step ? result.step.offset : undefined,
+          bytes: result.transaction
+            .serialize({ requireAllSignatures: false })
+            .toString("base64"),
+          messageHash: result.messageSha256,
+          lastValidBlockHeight: result.lastValidBlockHeight,
+          reserve: funding + BigInt(result.feeLamports),
+          fee: result.feeLamports,
+          funding,
+        };
+      });
+      const reserve = items.reduce((n, item) => n + item.reserve, 0n);
       if (spent() + reserve > BigInt(manifest.maxTotalLamports))
         throw new Error(
           "This approval would exceed the deployment budget. Stop and review a new plan.",
         );
       prepared = {
         id: randomBytes(24).toString("hex"),
-        kind,
-        bytes: result.transaction
-          .serialize({ requireAllSignatures: false })
-          .toString("base64"),
-        messageHash: result.messageSha256,
-        lastValidBlockHeight: result.lastValidBlockHeight,
-        reserve,
+        items,
+        futureAllowance: recover ? reserve : futureAllowance,
       };
+      const publicItems = items.map((item) => ({
+        kind: item.kind,
+        offset: item.offset,
+        transaction: item.bytes,
+        messageSha256: item.messageHash,
+        feeLamports: item.fee,
+        maximumFundingLamports: String(item.funding),
+        reservedLamports: String(item.reserve),
+      }));
       return {
         id: prepared.id,
-        kind,
-        transaction: prepared.bytes,
-        messageSha256: prepared.messageHash,
-        feeLamports: result.feeLamports,
-        maximumFundingLamports: String(funding),
+        kind: items.length > 1 ? "write-batch" : items[0]!.kind,
+        transaction: items.length === 1 ? items[0]!.bytes : undefined,
+        messageSha256: items.length === 1 ? items[0]!.messageHash : undefined,
+        transactions: publicItems,
+        count: items.length,
+        feeLamports: items.reduce((n, i) => n + i.fee, 0),
+        maximumFundingLamports: String(
+          items.reduce((n, i) => n + i.funding, 0n),
+        ),
         reservedLamports: String(reserve),
         wallet: manifest.wallet,
         planHash,
       };
+    }
+    async function broadcast(items: Entry[]) {
+      for (const item of items) {
+        if ((await rpc.getGenesisHash()) !== manifest.genesis)
+          throw new Error("RPC network changed");
+        // An interrupted batch retains every signed entry, including those not yet sent.
+        const signature = await rpc.sendRawTransaction(
+          Buffer.from(item.signedTransaction, "base64"),
+          { skipPreflight: false, maxRetries: 0 },
+        );
+        if (signature !== item.signature)
+          throw new Error("RPC returned a different signature");
+      }
     }
     const server = createServer(async (request, response) => {
       if (
@@ -440,84 +514,122 @@ export async function startDeploymentConsole(input: {
         const data = await body(request);
         if (path === "/api/status") return reply(response, 200, await status());
         if (path === "/api/prepare")
-          return reply(response, 200, await prepare(false));
+          return reply(
+            response,
+            200,
+            await prepare(false, data.batchSize ?? 1),
+          );
         if (path === "/api/recover")
           return reply(response, 200, await prepare(true));
         if (path === "/api/submit") {
-          if (
-            !prepared ||
-            data.id !== prepared.id ||
-            typeof data.transaction !== "string"
-          )
+          if (!prepared || data.id !== prepared.id)
             throw new Error("Approval no longer matches the prepared step");
+          const supplied = Array.isArray(data.transactions)
+            ? data.transactions
+            : typeof data.transaction === "string"
+              ? [data.transaction]
+              : [];
+          if (
+            supplied.length !== prepared.items.length ||
+            supplied.length > MAX_WRITE_BATCH ||
+            supplied.some((value: unknown) => typeof value !== "string")
+          )
+            throw new Error(
+              "Wallet must return the entire reviewed batch; nothing was submitted",
+            );
           await refreshPending();
           if (pending())
             throw new Error("An earlier approval is still pending");
-          const transaction = Transaction.from(
-            Buffer.from(data.transaction, "base64"),
-          );
-          assertDeploymentWalletSignature(
-            transaction,
-            prepared.messageHash,
-            new PublicKey(manifest.wallet),
-          );
           if ((await rpc.getGenesisHash()) !== manifest.genesis)
             throw new Error("RPC network changed");
+          const height = await rpc.getBlockHeight("finalized");
+          const reserve = prepared.items.reduce(
+            (n, item) => n + item.reserve,
+            0n,
+          );
           if (
-            (await rpc.getBlockHeight("finalized")) >
-            prepared.lastValidBlockHeight
+            spent() + reserve > BigInt(manifest.maxTotalLamports) ||
+            spent() + prepared.futureAllowance >
+              BigInt(manifest.maxTotalLamports)
           )
-            throw new Error(
-              "Approval expired before submission; prepare the step again",
+            throw new Error("Batch exceeds the remaining deployment budget");
+          // Validate ALL returned messages and signatures before saving or broadcasting ANY.
+          const entries: Entry[] = prepared.items.map((item, index) => {
+            if (height > item.lastValidBlockHeight)
+              throw new Error(
+                "Approval expired before submission; prepare the batch again",
+              );
+            const transaction = Transaction.from(
+              Buffer.from(supplied[index], "base64"),
             );
-          const bytes = transaction.serialize();
-          if (bytes.length > 1232 || !transaction.signature)
-            throw new Error("Invalid signed transaction");
-          const item: Entry = {
-            kind: prepared.kind,
-            signature: signatureText(transaction.signature),
-            signedTransaction: bytes.toString("base64"),
-            lastValidBlockHeight: prepared.lastValidBlockHeight,
-            reservedLamports: String(prepared.reserve),
-            state: "pending",
-          };
-          journal.entries.push(item);
-          persist(); // fsync BEFORE broadcast, including its signature and exact signed bytes.
+            assertDeploymentWalletSignature(
+              transaction,
+              item.messageHash,
+              new PublicKey(manifest.wallet),
+            );
+            const bytes = transaction.serialize();
+            if (bytes.length > 1232 || !transaction.signature)
+              throw new Error("Invalid signed transaction");
+            const signature = signatureText(transaction.signature);
+            if (journal.entries.some((entry) => entry.signature === signature))
+              throw new Error(
+                "Transaction already exists in the journal; reconcile it instead of approving it again",
+              );
+            return {
+              kind: item.kind,
+              offset: item.offset,
+              batchId: prepared!.id,
+              signature,
+              signedTransaction: bytes.toString("base64"),
+              lastValidBlockHeight: item.lastValidBlockHeight,
+              reservedLamports: String(item.reserve),
+              state: "pending",
+            };
+          });
+          if (
+            new Set(entries.map((item) => item.signature)).size !==
+            entries.length
+          )
+            throw new Error("Duplicate signed transactions in batch");
+          journal.entries.push(...entries);
+          persist(); // Fsync the ENTIRE batch before its first broadcast.
           prepared = null;
           try {
-            const signature = await rpc.sendRawTransaction(bytes, {
-              skipPreflight: false,
-              maxRetries: 0,
-            });
-            if (signature !== item.signature)
-              throw new Error("RPC returned a different signature");
+            await broadcast(entries);
             return reply(response, 200, {
               submitted: true,
-              signature: item.signature,
+              count: entries.length,
+              signature: entries[0]!.signature,
             });
           } catch {
             return reply(response, 202, {
               pending: true,
+              count: entries.length,
               message:
-                "Saved signed transaction. Outcome is unknown; check status or rebroadcast the same transaction.",
+                "Saved every signed transaction. Submission is incomplete or uncertain; check status or rebroadcast the same bytes.",
             });
           }
         }
         if (path === "/api/rebroadcast") {
           await refreshPending();
-          const item = pending();
-          if (!item) return reply(response, 200, await status());
-          if ((await rpc.getGenesisHash()) !== manifest.genesis)
-            throw new Error("RPC network changed");
-          await rpc.sendRawTransaction(
-            Buffer.from(item.signedTransaction, "base64"),
-            { skipPreflight: false, maxRetries: 0 },
-          );
-          return reply(response, 200, {
-            pending: true,
-            message:
-              "Rebroadcast the same signed bytes. Check finality before continuing.",
-          });
+          const items = pendingItems();
+          if (!items.length) return reply(response, 200, await status());
+          try {
+            await broadcast(items);
+            return reply(response, 200, {
+              pending: true,
+              count: items.length,
+              message:
+                "Rebroadcast the same signed bytes. Check finality before continuing.",
+            });
+          } catch {
+            return reply(response, 202, {
+              pending: true,
+              count: items.length,
+              message:
+                "Submission remains uncertain. All signed transactions are preserved; check status before continuing.",
+            });
+          }
         }
         reply(response, 404, { error: "Unknown operation" });
       } catch (error) {

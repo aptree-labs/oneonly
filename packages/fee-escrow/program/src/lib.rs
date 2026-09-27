@@ -82,6 +82,9 @@ pub mod oneonly_fee_escrow {
             config_data.get(..8) == Some(CONFIG_DISC.as_slice()),
             EscrowError::InvalidPool
         );
+        // Pinned Meteora PoolConfig layout: migration_option at byte 233,
+        // DAMM v2 = 1. No collection/migration path exists here for DAMM v1.
+        require!(config_data.get(233) == Some(&1), EscrowError::InvalidPool);
         // Existing graduated positions require a separate authority migration.
         // This instruction only opts in a pre-graduation VirtualPool.
         require!(

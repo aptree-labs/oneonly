@@ -78,7 +78,7 @@ Metro’s `src/Assets.js` imports image-size. OneOnly is built with Next, not a 
 
 ## Rust dependency review
 
-`cargo-audit` is not installed, so **a full cargo-audit run was not completed**. A read-only checkout of the official [RustSec advisory database](https://github.com/RustSec/advisory-db) at commit `e2111519ba6d14a5da59a7b2e5c8083ae8a37c01` was compared with `packages/fee-escrow/Cargo.lock`. Forty non-withdrawn package-name matches were checked against patched/unaffected ranges; three installed-version matches remain:
+The initial manual comparison was followed by an actual **cargo-audit 0.22.2** run, installed into a temporary tool directory. It reported **zero vulnerability findings, two unmaintained warnings, one unsoundness warning, and no yanked warning**. The tool’s default exit code was zero because warnings are not denied by default; this is not a warning-free audit. A read-only checkout of the official [RustSec advisory database](https://github.com/RustSec/advisory-db) at commit `e2111519ba6d14a5da59a7b2e5c8083ae8a37c01` was compared with `packages/fee-escrow/Cargo.lock`. Forty non-withdrawn package-name matches were checked against patched/unaffected ranges; three installed-version matches remain:
 
 | Dependency           | Finding                                                                                               | Local reachability / disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | -------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -86,7 +86,7 @@ Metro’s `src/Assets.js` imports image-size. OneOnly is built with Next, not a 
 | `libsecp256k1 0.6.0` | [RUSTSEC-2025-0161](https://rustsec.org/advisories/RUSTSEC-2025-0161.html), unmaintained              | Same host-only Solana compatibility dependency. An unmaintained notice is not evidence of a new exploitable defect. Prefer an upstream Solana upgrade; do not replace cryptographic internals ad hoc.                                                                                                                                                                                                                                                                                                                                                                  |
 | `bincode 1.3.3`      | [RUSTSEC-2025-0141](https://rustsec.org/advisories/RUSTSEC-2025-0141.html), unmaintained              | Used by Anchor/Solana compatibility code, including loader/account decoding. No patched version listed. Changing serializers can break chain wire compatibility; retain bounded, owner-checked account handling and track upstream replacement.                                                                                                                                                                                                                                                                                                                        |
 
-Other package-name matches were patched or explicitly unaffected at the installed versions, including Anchor 0.31.2 and curve25519-dalek 4.1.3. This manual check does not cover yanked packages, all target/feature combinations, source provenance, malicious packages, or unknown vulnerabilities. Add a pinned cargo-audit CI step, retaining dated and narrowly justified exceptions rather than suppressing entire classes of findings.
+Other package-name matches were patched or explicitly unaffected at the installed versions, including Anchor 0.31.2 and curve25519-dalek 4.1.3. The subsequent cargo-audit run included the normal yanked-crate check. Neither check establishes safety across all target/feature combinations, source provenance, malicious packages, or unknown vulnerabilities. Retain dated and narrowly justified warning dispositions rather than suppressing entire classes of findings.
 
 ## SBF build warnings
 
@@ -98,8 +98,31 @@ Before release, rebuild from the reviewed lockfiles, record the exact artifact h
 
 ## Required follow-through
 
-1. Review and test scoped UUID 11.1.1 and TOML 4.2.0 changes; rerun production audit and build afterward.
+1. Keep the now-tested scoped UUID 11.1.1 and TOML 4.2.0 overrides; repeat audit and build checks on future dependency changes.
 2. Prove the deployed bigint implementation cannot load the vulnerable native addon, or replace it with a reviewed compatible implementation.
 3. Record stream-json/image-size reachability exceptions with versions and review dates until compatible upgrades are verified. Recheck if new import paths or image-processing services are introduced.
 4. Add repeatable npm and Rust dependency checks in CI. Keep audit exceptions specific and visible.
 5. Complete artifact-matched devnet and independent contract review before treating this dependency triage as part of a mainnet decision. It is not a substitute for either.
+
+## Follow-through evidence
+
+- Scoped `jayson>uuid: 11.1.1` was applied by the release owner and separately checked with CommonJS/browser-RPC construction.
+- TOML 4.2.0 was fetched from the official npm registry into an isolated temporary directory with install scripts disabled. On Node 22.18.0, its CommonJS parser produced an identical result to 3.0.0 for the repository’s `Anchor.toml`. Injecting it at Anchor’s real CommonJS import point also passed explicit `AnchorProvider`/`Program` construction without any RPC request. This establishes the targeted compatibility check; a subsequent clean frozen-lockfile installation including both scoped overrides passed all five workspace type checks, the full Next production build, and 466 automated tests.
+- `scripts/check-native-bigint.mjs` scans installed workspace dependencies (following symlinks), Next standalone files, Next file traces, and either root or web-local Vercel output. It rejects native `.node` files under bigint-buffer, including arbitrary filenames and declared trace entries not copied yet. It does not execute packages or read environment files. It is an addon-presence guard, not a general malicious-code scanner.
+- `apps/web/package.json` runs the guard before and after `next build`; the post-build check requires a build ID and Next traces. Both repository Vercel configs use `pnpm build`. An external project build-command override would need to preserve this hook. Vercel packaging happens after the Next build: the post-build hook checks Next traces/standalone output, while `node scripts/check-native-bigint.mjs --require-build` should also run after `vercel build` when reviewing final `.vercel/output` locally.
+- `pnpm check:dependencies` runs the Node regression suite and guard. All **10 guard tests passed**, covering symlinked dependencies, standalone output, Vercel function output, traced native files, malformed/missing traces, and permitted unrelated Sharp binaries. The current local dependency tree and **59 existing Next traces passed**. The release owner then repeated the guard on a fresh isolated production build: all 32 new Next traces passed. This does not substitute for checking the final Vercel-packaged output. No CI workflow existed to amend; build-script enforcement was used instead.
+
+Reproducible Rust audit (temporary tool installation is not a project dependency):
+
+```sh
+cargo install cargo-audit --locked --version 0.22.2 --root /private/tmp/oneonly-cargo-audit
+/private/tmp/oneonly-cargo-audit/bin/cargo-audit audit \
+  --file packages/fee-escrow/Cargo.lock \
+  --db /private/tmp/oneonly-rustsec-review-20260927 --no-fetch --format json
+```
+
+The database checkout is pinned to the commit listed above; the report was retained at `/private/tmp/oneonly-cargo-audit-final.json`. For future release checks, fetch a current official database and use `--deny warnings` if the release policy is to require explicit disposition of all three remaining notices. The strict rerun with `--deny warnings` exited 1 as expected, proving these notices remain visible to a release gate. No blanket ignore list was added.
+
+## Patched lockfile audit
+
+The fresh frozen-lockfile installation was audited with `pnpm audit --prod --json` after both overrides. It reports **0 critical, 3 high, 1 moderate** findings: native bigint-buffer, two image-size parser findings, and stream-json. UUID and both TOML advisories are removed. The remaining exposure/mitigation analysis above remains applicable; these findings are not represented as patched or absent. The fresh Next build guard rejects the native bigint addon, and the reviewed web request paths do not use the affected Metro image parser or stream-json filters.

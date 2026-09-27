@@ -310,6 +310,10 @@ it("checks pinned SDK field offsets against the official coder", () => {
       codec.decode("virtualPool", originalPool).poolState.creator,
     ),
   ).toBe(true);
+  expect(originalConfig[233]).toBe(
+    codec.decode("poolConfig", originalConfig).migrationOption,
+  );
+  expect(originalConfig[233]).toBe(1);
   expect(originalPool[308]).toBe(
     codec.decode("virtualPool", originalPool).poolState.migrationProgress,
   );
@@ -322,6 +326,21 @@ it("transfers creator authority atomically through the real devnet Meteora progr
       .poolState.creator.equals(allocation),
   ).toBe(true);
 });
+it.each([0, 2, 255])(
+  "rejects unsupported graduation option %s before changing creator authority",
+  (option) => {
+    const config = data(dbcConfig);
+    config[233] = option;
+    set(dbcConfig, config, DBC);
+    failed(send(init()), "InvalidPool");
+    expect(svm.getAccount(address(allocation.toBase58())).exists).toBe(false);
+    expect(
+      codec
+        .decode("virtualPool", data(pool))
+        .poolState.creator.equals(payer.publicKey),
+    ).toBe(true);
+  },
+);
 it("rejects wrong creator and graduated pools before locking an allocation", async () => {
   state.creator = Keypair.generate().publicKey;
   await savePool();

@@ -25,6 +25,7 @@ const BUFFER_HEADER = 37,
   PROGRAM_DATA_HEADER = 45;
 const MAX_PROGRAM_BYTES = 10 * 1024 * 1024;
 export const WRITE_CHUNK_BYTES = 900;
+export const MAX_WRITE_BATCH = 16;
 export type DeploymentManifest = {
   version: 1;
   network: keyof typeof DEPLOYMENT_GENESIS;
@@ -348,8 +349,9 @@ async function finish(
   m: DeploymentManifest,
   instructions: TransactionInstruction[],
   localSigners: Keypair[],
+  blockhash?: Awaited<ReturnType<DeploymentRpc["getLatestBlockhash"]>>,
 ) {
-  const latest = await rpc.getLatestBlockhash("finalized");
+  const latest = blockhash ?? (await rpc.getLatestBlockhash("finalized"));
   const transaction = new Transaction({
     feePayer: new PublicKey(m.wallet),
     ...latest,
@@ -514,4 +516,55 @@ export function assertDeploymentWalletSignature(
     throw new Error(
       "Wallet returned an altered or incompletely signed deployment transaction",
     );
+}
+
+/** Only independent upload writes batch together. Creation/deployment remain atomic single approvals. */
+export async function prepareDeploymentBatch(
+  input: Parameters<typeof prepareNextDeployment>[0] & { batchSize?: number },
+) {
+  const batchSize = input.batchSize ?? 1;
+  if (
+    !Number.isInteger(batchSize) ||
+    batchSize < 1 ||
+    batchSize > MAX_WRITE_BATCH
+  )
+    throw new Error("Write batch must contain between 1 and 16 transactions");
+  const { rpc, manifest: m, artifact, localKeys } = input;
+  validateDeploymentManifest(m, artifact);
+  signingGate(m);
+  if (
+    localKeys.program.publicKey.toBase58() !== m.program ||
+    localKeys.buffer.publicKey.toBase58() !== m.buffer
+  )
+    throw new Error("Local creation keys do not match the public plan");
+  await networkCheck(rpc, m);
+  await pendingCheck(rpc, input.pending);
+  const state = await inspectDeployment(rpc, m, artifact);
+  if (state.next?.kind !== "write") {
+    const single = await prepareNextDeployment(input);
+    return single.complete
+      ? { complete: true as const, items: [] }
+      : { complete: false as const, items: [single] };
+  }
+  await deploymentCosts(rpc, m);
+  const latest = await rpc.getLatestBlockhash("finalized");
+  const wallet = new PublicKey(m.wallet),
+    buffer = new PublicKey(m.buffer);
+  const items = await Promise.all(
+    state.missingChunks.slice(0, batchSize).map(async (offset) => {
+      const bytes = Buffer.from(
+        artifact.subarray(offset, offset + WRITE_CHUNK_BYTES),
+      );
+      const write = instruction(
+        Buffer.concat([u32(1), u32(offset), u64(BigInt(bytes.length)), bytes]),
+        [key(buffer, true), key(wallet, false, true)],
+      );
+      return {
+        complete: false as const,
+        step: { kind: "write" as const, offset },
+        ...(await finish(rpc, m, [write], [], latest)),
+      };
+    }),
+  );
+  return { complete: false as const, items };
 }

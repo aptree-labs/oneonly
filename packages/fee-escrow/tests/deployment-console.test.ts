@@ -8,6 +8,7 @@ import { Keypair, Transaction } from "@solana/web3.js";
 import {
   createDeploymentManifest,
   DEPLOYMENT_GENESIS,
+  UPGRADEABLE_LOADER,
 } from "../src/deployment";
 import {
   startDeploymentConsole,
@@ -274,4 +275,213 @@ it("cleans its lock on startup failure but never silently removes a stale lock",
   expect(existsSync(join(directory, "console.lock"))).toBe(true);
   unlinkSync(join(directory, "console.lock"));
   local = await startDeploymentConsole(startInput);
+});
+async function writeBatchFixture(length = 3000, budget = 1_000_000n) {
+  await local.close();
+  const artifact = Buffer.alloc(length, 9);
+  Buffer.from([127, 69, 76, 70]).copy(artifact);
+  startInput.artifact = artifact;
+  startInput.manifest = createDeploymentManifest({
+    network: "devnet",
+    artifact,
+    wallet: wallet.publicKey,
+    program: startInput.localKeys.program.publicKey,
+    buffer: startInput.localKeys.buffer.publicKey,
+    maxTotalLamports: budget,
+    maxFeePerTransactionLamports: 10_000n,
+  });
+  const data = Buffer.alloc(37 + length);
+  data.writeUInt32LE(1);
+  data[4] = 1;
+  wallet.publicKey.toBuffer().copy(data, 5);
+  vi.mocked(rpc.getMultipleAccountsInfo).mockImplementation(async (keys) =>
+    keys.map((key) =>
+      key.toBase58() === startInput.manifest.buffer
+        ? {
+            data,
+            lamports: 1000,
+            executable: false,
+            rentEpoch: 0,
+            owner: UPGRADEABLE_LOADER,
+          }
+        : null,
+    ),
+  );
+  vi.mocked(rpc.getSignatureStatuses).mockImplementation(
+    async (signatures) => ({
+      context: { slot: 1 },
+      value: signatures.map(() => null),
+    }),
+  );
+  vi.mocked(rpc.getTransaction).mockImplementation(
+    async () =>
+      ({
+        meta: { fee: 5000, preBalances: [100000], postBalances: [95000] },
+        transaction: {
+          message: { getAccountKeys: () => ({ get: () => wallet.publicKey }) },
+        },
+      }) as never,
+  );
+  local = await startDeploymentConsole(startInput);
+  capability = new URL(
+    JSON.parse(readFileSync(local.accessPath, "utf8")).url,
+  ).hash.slice(1);
+  return data;
+}
+async function signedBatch(size = 3) {
+  const result = await post("prepare", { batchSize: size });
+  expect(result.status).toBe(200);
+  return {
+    id: result.body.id,
+    transactions: result.body.transactions.map(
+      (item: { transaction: string }) => {
+        const tx = Transaction.from(Buffer.from(item.transaction, "base64"));
+        tx.partialSign(wallet);
+        return tx.serialize().toString("base64");
+      },
+    ),
+  };
+}
+it("requires all batch signatures and rejects a tampered final transaction before saving or sending any", async () => {
+  await writeBatchFixture();
+  const input = await signedBatch();
+  expect(
+    (
+      await post("submit", {
+        ...input,
+        transactions: input.transactions.slice(0, 2),
+      })
+    ).status,
+  ).toBe(400);
+  const tx = Transaction.from(Buffer.from(input.transactions[2], "base64"));
+  tx.instructions[2].data[16] ^= 1;
+  tx.partialSign(wallet);
+  expect(
+    (
+      await post("submit", {
+        ...input,
+        transactions: [
+          ...input.transactions.slice(0, 2),
+          tx.serialize().toString("base64"),
+        ],
+      })
+    ).status,
+  ).toBe(400);
+  expect(rpc.sendRawTransaction).not.toHaveBeenCalled();
+  expect(existsSync(join(directory, "journal.json"))).toBe(false);
+});
+it("journals a whole batch before sending, preserves partial sends across restart, and only rebroadcasts unresolved exact bytes", async () => {
+  await writeBatchFixture();
+  const input = await signedBatch();
+  let sent = 0;
+  vi.mocked(rpc.sendRawTransaction).mockImplementation(async (raw) => {
+    expect(journal().entries).toHaveLength(3);
+    const entry = journal().entries.find(
+      (item: { signedTransaction: string }) =>
+        item.signedTransaction === Buffer.from(raw).toString("base64"),
+    );
+    expect(entry).toBeTruthy();
+    sent++;
+    if (sent === 2) throw new Error("timeout");
+    return entry.signature;
+  });
+  expect((await post("submit", input)).status).toBe(202);
+  expect(sent).toBe(2);
+  const saved = journal().entries;
+  vi.mocked(rpc.getSignatureStatuses).mockImplementation(
+    async (signatures) => ({
+      context: { slot: 1 },
+      value: signatures.map((signature) =>
+        signature === saved[0].signature
+          ? {
+              slot: 1,
+              confirmations: null,
+              confirmationStatus: "finalized",
+              err: null,
+            }
+          : null,
+      ),
+    }),
+  );
+  expect((await post("status")).body.pending.count).toBe(2);
+  await local.close();
+  local = await startDeploymentConsole(startInput);
+  capability = new URL(
+    JSON.parse(readFileSync(local.accessPath, "utf8")).url,
+  ).hash.slice(1);
+  expect((await post("prepare", { batchSize: 16 })).status).toBe(400);
+  const replayed: string[] = [];
+  vi.mocked(rpc.sendRawTransaction).mockImplementation(async (raw) => {
+    const encoded = Buffer.from(raw).toString("base64");
+    replayed.push(encoded);
+    return saved.find(
+      (item: { signedTransaction: string }) =>
+        item.signedTransaction === encoded,
+    ).signature;
+  });
+  expect((await post("rebroadcast")).status).toBe(200);
+  expect(replayed).toEqual(
+    saved
+      .slice(1)
+      .map((entry: { signedTransaction: string }) => entry.signedTransaction),
+  );
+  expect(journal().entries).toHaveLength(3);
+  expect((await post("status")).body.reservedLamports).toBe("15000");
+});
+it("fails closed on missing batch statuses and preserves pending entries", async () => {
+  await writeBatchFixture();
+  const input = await signedBatch();
+  await post("submit", input);
+  vi.mocked(rpc.getSignatureStatuses).mockResolvedValue({
+    context: { slot: 1 },
+    value: [null],
+  });
+  expect((await post("status")).body.error).toMatch(
+    /Incomplete transaction status/,
+  );
+  expect(
+    journal().entries.every(
+      (entry: { state: string }) => entry.state === "pending",
+    ),
+  ).toBe(true);
+  expect((await post("prepare", { batchSize: 3 })).status).toBe(400);
+});
+it("bounds batch size and rejects any fee quote above the per-transaction ceiling", async () => {
+  await writeBatchFixture(20000);
+  expect((await post("prepare", { batchSize: 17 })).status).toBe(400);
+  const valid = await post("prepare", { batchSize: 16 });
+  expect(valid.body.count).toBe(16);
+  expect(valid.body.reservedLamports).toBe("80000");
+  vi.mocked(rpc.getFeeForMessage).mockResolvedValueOnce({
+    context: { slot: 1 },
+    value: 10001,
+  });
+  expect((await post("prepare", { batchSize: 16 })).status).toBe(400);
+  expect(rpc.sendRawTransaction).not.toHaveBeenCalled();
+});
+
+it("keeps every failed batch fee reserved before evaluating the remaining deployment budget", async () => {
+  await writeBatchFixture(3000, 65_000n);
+  const input = await signedBatch();
+  await post("submit", input);
+  vi.mocked(rpc.getSignatureStatuses).mockImplementation(
+    async (signatures) => ({
+      context: { slot: 1 },
+      value: signatures.map(() => ({
+        slot: 1,
+        confirmations: null,
+        confirmationStatus: "finalized",
+        err: { InstructionError: [0, "InvalidArgument"] },
+      })),
+    }),
+  );
+  const state = (await post("status")).body;
+  expect(state).toMatchObject({
+    pending: null,
+    reservedLamports: "15000",
+    actualFeesLamports: "15000",
+  });
+  expect((await post("prepare", { batchSize: 3 })).body.error).toMatch(
+    /remaining deployment allowance/,
+  );
 });

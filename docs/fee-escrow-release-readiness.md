@@ -1,23 +1,26 @@
 # Creator-fee release readiness
 
-Reviewed 27 September 2026. Status: **development and devnet validation; mainnet not cleared**. Internal engineering review, not an independent security audit. No percentage guarantee is assigned.
+Reviewed 27 September 2026. Status: **internal engineering review complete; reviewed code is ready for controlled devnet acceptance, mainnet not cleared**. Internal engineering review, not an independent security audit. No percentage guarantee is assigned.
 
 ## Verified evidence
 
 - Earlier live devnet lifecycle: Token-2022 launch, fixed shares, DBC collection and payout, graduation, DAMM trading/collection, and cumulative payout reconciled to actual wallet token balances. This used fixture identity attestations, not a real fresh X post.
 - Real staging X OAuth, social-profile wallet linking and read-only provider lookup passed. The reconnect fix is deployed separately.
-- New release: all five workspace TypeScript checks and 458 automated tests passed before the final two console regressions; all 17 focused deployment tests pass after those fixes. Two isolated desktop/mobile browser tests pass with a generated test wallet and mocked RPC. The local production build compiles. The isolated build has no production database credentials, so its Explore prefetch warning is not a production-data test.
-- New contract: 11 native tests, 27 compiled claim/security tests and 8 real Meteora binary integration tests pass, covering authority, pause, verifier epoch revocation, packet sizes, accounting, recipient destination, nonce replay, expiry and collection.
+- Fresh isolated install using the frozen patched lockfile: all five workspace type checks, full Next production build, and 466 automated tests pass. The build includes scoped UUID/TOML fixes; no production credentials or live database were used.
+- New contract: 11 native Rust tests, 27 compiled claim/security tests and 11 real Meteora binary integration tests pass. Coverage includes the newly enforced DAMMv2-only allocation guard, authority, pause, verifier epoch revocation, packet sizes, accounting, recipient destination, nonce replay, expiry and collection.
+- Final deployment subset: 23 tests pass; six desktop/mobile browser tests use a generated Wallet Standard wallet and mocked RPC. Sixteen-write batches are journaled and checked in full before any submission.
+- Ten native-addon guard regressions pass; pre/post build scan passes including 32 freshly generated Next traces. Rust cargo-audit reports no vulnerability advisories and three explicitly documented warnings. See the dependency review for remaining npm reachability dispositions.
+- All actionable findings from this internal review are resolved. See `fee-escrow-final-review.md`; this is neither an independent audit nor proof of real-wallet acceptance.
 - Deployment preparation remains devnet-only. External wallet owns funding, buffer, upgrade and refund authority; local keys create accounts, not authorize the user's wallet. Exact artifact and transaction checks are required.
 
 ## Remaining go/no-go gates
 
 1. Coordinate the new devnet program upgrade, control initialization and matching staging client; verify deployed bytes and control state. Previous v1 live receipts do not prove this new artifact.
-2. Reduce the deployment signing burden safely before calling this a fast deployment flow. The current 551,112-byte artifact requires 613 write transactions plus create/deploy: at least 615 separate wallet approvals with the existing single-step console. Any batching or limited upload signer requires its own budget, authority and retry review. Rehearse the localhost console with the actual wallet extension, including cancellation, reload/resume, uncertain confirmation, buffer recovery, deployed-byte/authority verification and cost accounting. The user signs; no recovery phrase is entered into the console or chat.
+2. Rehearse the localhost console with the actual wallet extension, including cancellation, reload/resume, uncertain confirmation, buffer recovery, deployed-byte/authority verification and cost accounting. Bounded batching is implemented and reviewed: the 551,432-byte artifact requires 39 write-batch requests plus create/deploy, or 41 application approval requests instead of 615 single-step requests. The extension may still display individual transactions; actual Jupiter behavior remains unverified. The user signs; no recovery phrase is entered into the console or chat.
 3. Complete a real-account fresh challenge post → provider verification → wallet claim → chain receipt and balance reconciliation. No post has been published on the user's behalf; existing-post lookup cannot pass a fresh challenge.
 4. Keep financial beneficiary bindings immutable unless a separately reviewed wallet recovery/migration policy is implemented. Admin or X verifier alone must not reassign recipients.
 5. Implement and rehearse any promised retirement migration. Existing Meteora fee sharing is only a conditional successor; the current retirement inspector cannot authorize closing an active program. Preserve late/unbound recipients, partially claimed balances, future DBC rights and DAMM NFTs.
-6. Finish dependency mitigation and independent contract review. Unit tests/internal review are not an independent audit.
+6. Preserve the tested dependency overrides and build guard through Vercel packaging, review the documented residual dependency warnings, and obtain any required independent contract review. Internal review and automated tests are not an independent audit.
 7. Prepare mainnet-specific claim domain, fixed program identity, deployment artifact and application rollout configuration. Current code deliberately gates signing/feature use to devnet.
 8. Verify the user's dedicated wallet ownership, backup recovery privately, exact funding/rent/fee limits and intended authority assignment before any mainnet signature. Prior approximate funding estimates are not final quotes.
 
