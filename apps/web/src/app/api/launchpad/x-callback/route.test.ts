@@ -1,6 +1,11 @@
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { randomBytes } from "node:crypto";
 import { NextRequest } from "next/server";
+import {
+  walletSessionCookie,
+  X_SESSION_COOKIE,
+  verifyXSession,
+} from "@/lib/x-session";
 import { signXLink } from "@/lib/x-link";
 const state = vi.hoisted(() => ({
   session: vi.fn(),
@@ -40,7 +45,11 @@ function request(nonce: string, browserNonce = nonce) {
   });
   return new NextRequest(
     `https://app.oneonly.lol/api/launchpad/x-callback?profile=${ticket}`,
-    { headers: { cookie: `oneonly-x-link=${browserNonce}` } },
+    {
+      headers: {
+        cookie: `oneonly-x-link=${browserNonce}; ${walletSessionCookie()}=test-wallet-session; oneonly-x-session=test-wallet-session`,
+      },
+    },
   );
 }
 it("stores a verified profile and returns global linking to Explore", async () => {
@@ -94,4 +103,31 @@ it("does not link an expired/revoked session or override a different signed-in w
     ),
   ).toContain("x=failed");
   expect(state.save).not.toHaveBeenCalled();
+});
+
+it("issues session-bound X ownership only after a valid callback", async () => {
+  const response = await GET(request(randomBytes(32).toString("base64url")));
+  const identity = state.values.mock.calls[0][0];
+  const ownership = response.cookies.get(X_SESSION_COOKIE);
+  expect(ownership).toMatchObject({
+    httpOnly: true,
+    secure: true,
+    sameSite: "strict",
+    path: "/api/creator-fees",
+  });
+  expect(
+    verifyXSession(
+      ownership!.value,
+      {
+        wallet,
+        xId: identity.xId,
+        verifiedAt: identity.linkedAt.getTime(),
+      },
+      "test-wallet-session",
+    ),
+  ).toBe(true);
+  const rejected = await GET(
+    request(randomBytes(32).toString("base64url"), "wrong-nonce"),
+  );
+  expect(rejected.cookies.get(X_SESSION_COOKIE)).toBeUndefined();
 });

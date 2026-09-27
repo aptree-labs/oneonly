@@ -230,15 +230,6 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               {error}
             </p>
           )}
-          {!recipient && needsXReconnect && !account?.binding && (
-            <button
-              className="lp-secondary"
-              disabled={loading || !status.bindingAvailable}
-              onClick={() => void reconnectX()}
-            >
-              {loading ? "Connecting…" : "Reconnect X"}
-            </button>
-          )}
           {!status.escrowAvailable && (
             <p className="lp-notice">
               Fee claims are not available yet. Allocations appear here once a
@@ -266,16 +257,20 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               <div>
                 <h2>Link your claim wallet</h2>
                 <p className="lp-caption">
-                  Use your verified X account and connected wallet to claim your
-                  share.
+                  Register this wallet for your X account’s creator fees. This
+                  claim wallet cannot be changed in the preview.
                 </p>
               </div>
               <button
                 className="lp-primary"
                 disabled={!status.bindingAvailable || loading}
-                onClick={() => void bind()}
+                onClick={() => void (needsXReconnect ? reconnectX() : bind())}
               >
-                Link wallet
+                {needsXReconnect
+                  ? "Verify X account"
+                  : loading
+                    ? "Linking…"
+                    : "Use this wallet for claims"}
               </button>
             </div>
           )}

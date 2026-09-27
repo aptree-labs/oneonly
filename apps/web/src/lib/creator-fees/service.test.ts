@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, afterEach, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes } from "node:crypto";
 import {
   createLocalDatabase,
   creatorFeeProfiles,
@@ -10,6 +10,20 @@ import {
   eq,
   type Database,
 } from "@oneonly/db";
+const ownershipCookies = vi.hoisted(() => new Map<string, string>());
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (key: string) =>
+      ownershipCookies.has(key)
+        ? { value: ownershipCookies.get(key) }
+        : undefined,
+  }),
+}));
+import {
+  signXSession,
+  X_SESSION_COOKIE,
+  walletSessionCookie,
+} from "../x-session";
 vi.mock("../cache/public-cache", () => ({
   publicCache: (_key: string, _policy: unknown, load: () => Promise<unknown>) =>
     load(),
@@ -46,7 +60,10 @@ beforeAll(async () => {
 afterAll(async () => {
   await close();
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  ownershipCookies.clear();
+});
 function enable() {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
   vi.stubEnv("SOLANA_NETWORK", "devnet");
@@ -327,4 +344,32 @@ it("requires fresh OAuth for a new permanent binding but preserves idempotent re
     .set({ xId: "902" })
     .where(eq(walletProfiles.wallet, "wallet901"));
   await expect(bindFeeWallet("wallet901", db)).rejects.toThrow("already bound");
+});
+
+it("uses this session's original X verification for a later claim-wallet registration", async () => {
+  enable();
+  vi.stubEnv("X_LINK_SECRET", randomBytes(32).toString("hex"));
+  vi.stubEnv("LAUNCHPAD_URL", "https://staging.oneonly.lol");
+  await seed("903", "wallet903");
+  const linkedAt = new Date(Date.now() - 3600_000);
+  await db
+    .update(walletProfiles)
+    .set({ linkedAt })
+    .where(eq(walletProfiles.wallet, "wallet903"));
+  ownershipCookies.set(
+    X_SESSION_COOKIE,
+    signXSession(
+      { wallet: "wallet903", xId: "903", verifiedAt: linkedAt.getTime() },
+      "same-session",
+    ),
+  );
+  ownershipCookies.set(walletSessionCookie(), "different-session");
+  await expect(bindFeeWallet("wallet903", db)).rejects.toMatchObject({
+    code: "x_reauthentication_required",
+  });
+  ownershipCookies.set(walletSessionCookie(), "same-session");
+  expect(await bindFeeWallet("wallet903", db)).toMatchObject({
+    wallet: "wallet903",
+    xId: "903",
+  });
 });
