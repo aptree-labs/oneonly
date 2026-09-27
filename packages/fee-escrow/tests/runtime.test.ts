@@ -27,7 +27,12 @@ import {
   claimMessage,
   claimInstructions,
   initializeConfigInstruction,
+  initializeControlInstruction,
+  setPausedInstruction,
+  rotateVerifierInstruction,
+  decodeControl,
   configAddress,
+  controlAddress,
   decodeConfig,
 } from "../src";
 
@@ -135,6 +140,15 @@ function setup(program = TOKEN_PROGRAM_ID) {
       Buffer.from([bump]),
     ]),
   );
+  const [control, controlBump] = pda(Buffer.from("control"));
+  set(
+    control,
+    Buffer.concat([
+      discriminator("account", "Control"),
+      Buffer.from([controlBump, 0]),
+      u64(1n),
+    ]),
+  );
   [allocation, bump] = pda(Buffer.from("allocation"), pool.toBuffer());
   set(
     allocation,
@@ -186,6 +200,7 @@ function build(
     hash: Buffer;
     limit: bigint;
     version: bigint;
+    epoch: bigint;
     nonce: Buffer;
     issued: bigint;
     expires: bigint;
@@ -200,6 +215,7 @@ function build(
     hash = overrides.hash ?? xid,
     limit = overrides.limit ?? 250n,
     version = overrides.version ?? 1n,
+    epoch = overrides.epoch ?? 1n,
     nonce = overrides.nonce ?? randomBytes(32),
     issued = overrides.issued ?? 1000n,
     expires = overrides.expires ?? 1300n;
@@ -218,9 +234,10 @@ function build(
     nonce,
     i64(issued),
     i64(expires),
+    u64(epoch),
   ]);
   const message = Buffer.concat([
-    Buffer.from("oneonly:fee-claim:v1:devnet"),
+    Buffer.from("oneonly:fee:v2:devnet"),
     (overrides.messageProgram ?? PROGRAM).toBuffer(),
     (overrides.messageAllocation ?? allocation).toBuffer(),
     (overrides.messageMint ?? mint).toBuffer(),
@@ -232,6 +249,7 @@ function build(
     nonce,
     i64(issued),
     i64(expires),
+    u64(epoch),
   ]);
   const [beneficiary] = pda(Buffer.from("beneficiary"), hash),
     [claimed] = pda(Buffer.from("claim"), ledger.toBuffer(), hash),
@@ -257,6 +275,7 @@ function build(
       key(tokenProgram),
       key(ASSOCIATED_TOKEN_PROGRAM_ID),
       key(SystemProgram.programId),
+      key(controlAddress()),
     ],
     data: Buffer.concat([discriminator("global", "claim"), args]),
   });
@@ -419,6 +438,7 @@ it("executes the public TS client encoding against the compiled program within o
     xIdHash: xid,
     cumulativeLimit: 250n,
     bindingVersion: 1n,
+    verifierEpoch: 1n,
     nonce: b.nonce,
     issuedAt: 1000n,
     expiresAt: 1100n,
@@ -499,3 +519,188 @@ it.each([true, false])(
     }
   },
 );
+
+const loader = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+function updateUpgradeAuthority(authority: PublicKey | null) {
+  const pd = new PublicKey(get(PROGRAM).subarray(4, 36));
+  const info = svm.getAccount(address(pd.toBase58()));
+  if (!info.exists) throw new Error("Missing program data");
+  const data = Buffer.from(info.data);
+  data[12] = authority ? 1 : 0;
+  (authority?.toBuffer() ?? Buffer.alloc(32)).copy(data, 13);
+  svm.setAccount({ ...info, data });
+}
+function enableAdministration(authority = wallet.publicKey) {
+  svm.addProgramWithLoader(
+    address(PROGRAM.toBase58()),
+    readFileSync(so),
+    address(loader.toBase58()),
+  );
+  updateUpgradeAuthority(authority);
+}
+function administer(instruction: TransactionInstruction, signer = wallet) {
+  const tx = new Transaction({
+    feePayer: signer.publicKey,
+    recentBlockhash: svm.latestBlockhash(),
+  }).add(instruction);
+  tx.sign(signer);
+  return svm.sendTransaction(getTransactionDecoder().decode(tx.serialize()));
+}
+function readControl() {
+  return decodeControl({
+    data: get(controlAddress()),
+    owner: PROGRAM,
+    lamports: 1,
+    executable: false,
+  });
+}
+it.each([true, false])(
+  "initializes control only with the current upgrade authority (%s)",
+  (authorized) => {
+    enableAdministration(
+      authorized ? wallet.publicKey : Keypair.generate().publicKey,
+    );
+    // Simulate an upgrade from v1: old config exists, control PDA does not yet exist.
+    set(controlAddress(), Buffer.alloc(0), SystemProgram.programId);
+    const result = administer(initializeControlInstruction(wallet.publicKey));
+    if (authorized) {
+      success(result);
+      expect(readControl()).toMatchObject({ paused: false, verifierEpoch: 1n });
+      failed(administer(initializeControlInstruction(wallet.publicKey)));
+    } else {
+      failed(result, "InvalidAuthority");
+      expect(get(controlAddress())).toHaveLength(0);
+    }
+  },
+);
+it("pauses claims without consuming their nonce, then allows the same proof after unpause", () => {
+  enableAdministration();
+  const pending = build();
+  success(administer(setPausedInstruction(wallet.publicKey, true)));
+  expect(readControl().paused).toBe(true);
+  failed(send(pending), "Paused");
+  expect(AccountLayout.decode(get(vault)).amount).toBe(1000n);
+  expect(svm.getAccount(address(pending.receipt.toBase58())).exists).toBe(
+    false,
+  );
+  success(administer(setPausedInstruction(wallet.publicKey, false)));
+  success(send(pending));
+  expect(AccountLayout.decode(get(pending.destination)).amount).toBe(250n);
+});
+it("fails closed when the required control account is missing or substituted", () => {
+  const missing = build();
+  set(controlAddress(), Buffer.alloc(0), SystemProgram.programId);
+  failed(send(missing));
+  expect(AccountLayout.decode(get(vault)).amount).toBe(1000n);
+  setup();
+  const other = Keypair.generate().publicKey;
+  set(other, get(controlAddress()));
+  const substituted = build();
+  substituted.claim.keys[substituted.claim.keys.length - 1].pubkey = other;
+  failed(send(substituted), "ConstraintSeeds");
+  expect(svm.getAccount(address(substituted.receipt.toBase58())).exists).toBe(
+    false,
+  );
+});
+it("uses current upgrade authority for pause and rotation, rejecting former, unsigned and revoked authority", () => {
+  enableAdministration();
+  const replacement = Keypair.generate();
+  svm.airdrop(
+    address(replacement.publicKey.toBase58()),
+    lamports(1_000_000_000n),
+  );
+  updateUpgradeAuthority(replacement.publicKey);
+  failed(
+    administer(setPausedInstruction(wallet.publicKey, true)),
+    "InvalidAuthority",
+  );
+  failed(
+    administer(
+      rotateVerifierInstruction(wallet.publicKey, Keypair.generate().publicKey),
+    ),
+    "InvalidAuthority",
+  );
+  expect(readControl()).toMatchObject({ paused: false, verifierEpoch: 1n });
+  const unsigned = setPausedInstruction(replacement.publicKey, true);
+  unsigned.keys[0].isSigner = false;
+  failed(administer(unsigned), "AccountNotSigner");
+  success(
+    administer(setPausedInstruction(replacement.publicKey, true), replacement),
+  );
+  expect(readControl().paused).toBe(true);
+  updateUpgradeAuthority(null);
+  failed(
+    administer(setPausedInstruction(replacement.publicKey, false), replacement),
+    "InvalidAuthority",
+  );
+  expect(readControl().paused).toBe(true);
+});
+it("rejects fake ProgramData or program accounts for emergency controls", () => {
+  enableAdministration();
+  const pd = new PublicKey(get(PROGRAM).subarray(4, 36));
+  const fake = Keypair.generate().publicKey;
+  set(fake, get(pd), loader);
+  const wrongData = setPausedInstruction(wallet.publicKey, true);
+  wrongData.keys[4].pubkey = fake;
+  failed(administer(wrongData), "InvalidAuthority");
+  const wrongProgram = setPausedInstruction(wallet.publicKey, true);
+  wrongProgram.keys[3].pubkey = SystemProgram.programId;
+  failed(administer(wrongProgram), "InvalidProgramId");
+  expect(readControl().paused).toBe(false);
+});
+it("rotation revokes pending signatures, including future-issued proofs after A to B to A", () => {
+  enableAdministration();
+  const a = verifier;
+  const b = Keypair.generate();
+  const old = build();
+  const future = build({ issued: 1100n, expires: 1300n });
+  success(administer(rotateVerifierInstruction(wallet.publicKey, b.publicKey)));
+  expect(readControl().verifierEpoch).toBe(2n);
+  failed(send(old), "InvalidVerifierEpoch");
+  const middle = build({ signer: b, epoch: 2n, limit: 100n });
+  success(send(middle));
+  expect(AccountLayout.decode(get(middle.destination)).amount).toBe(100n);
+  success(administer(rotateVerifierInstruction(wallet.publicKey, a.publicKey)));
+  expect(readControl().verifierEpoch).toBe(3n);
+  const clock = svm.getClock();
+  clock.unixTimestamp = 1100n;
+  svm.setClock(clock);
+  failed(send(future), "InvalidVerifierEpoch");
+  failed(send(old), "InvalidVerifierEpoch");
+  expect(svm.getAccount(address(future.receipt.toBase58())).exists).toBe(false);
+  expect(svm.getAccount(address(old.receipt.toBase58())).exists).toBe(false);
+  const fresh = build({ signer: a, epoch: 3n, issued: 1100n });
+  success(send(fresh));
+  expect(AccountLayout.decode(get(fresh.destination)).amount).toBe(250n);
+});
+it("validates verifier points on chain and keeps rotation atomic on invalid keys or epoch overflow", () => {
+  enableAdministration();
+  const original = Buffer.from(get(config));
+  const offCurve = PublicKey.findProgramAddressSync(
+    [Buffer.from("invalid-verifier")],
+    PROGRAM,
+  )[0];
+  for (const invalid of [PublicKey.default, offCurve]) {
+    const ix = rotateVerifierInstruction(
+      wallet.publicKey,
+      Keypair.generate().publicKey,
+    );
+    ix.data = Buffer.concat([
+      discriminator("global", "rotate_verifier"),
+      invalid.toBuffer(),
+    ]);
+    failed(administer(ix), "InvalidVerifier");
+    expect(get(config)).toEqual(original);
+    expect(readControl().verifierEpoch).toBe(1n);
+  }
+  const control = get(controlAddress());
+  control.writeBigUInt64LE((1n << 64n) - 1n, 10);
+  set(controlAddress(), control);
+  failed(
+    administer(
+      rotateVerifierInstruction(wallet.publicKey, Keypair.generate().publicKey),
+    ),
+    "Overflow",
+  );
+  expect(get(config)).toEqual(original);
+});

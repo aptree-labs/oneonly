@@ -221,6 +221,8 @@ it("checks authoritative balances before asking for a post and freezes the cumul
   enable();
   vi.stubEnv("CREATOR_FEE_PROGRAM_ID", "program401");
   vi.mocked(creatorFeeRuntime).mockResolvedValue({
+    verifierEpoch: 1n,
+    paused: false,
     program: {} as never,
     verifier: {} as never,
   });

@@ -18,7 +18,7 @@ use anchor_spl::{
 declare_id!("BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4");
 pub const DBC: Pubkey = pubkey!("dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN");
 pub const DAMM: Pubkey = pubkey!("cpamdpZCGKUy5JxQXB4dcpGPiikHawvSWAd6mEn1sGG");
-pub const DOMAIN: &[u8] = b"oneonly:fee-claim:v1:devnet";
+pub const DOMAIN: &[u8] = b"oneonly:fee:v2:devnet";
 pub const MAX_RECIPIENTS: usize = 8;
 const POOL_DISC: [u8; 8] = [213, 224, 5, 209, 98, 69, 119, 92];
 const CONFIG_DISC: [u8; 8] = [26, 108, 14, 123, 116, 230, 129, 43];
@@ -27,15 +27,48 @@ const CONFIG_DISC: [u8; 8] = [26, 108, 14, 123, 116, 230, 129, 43];
 pub mod oneonly_fee_escrow {
     use super::*;
     pub fn initialize_config(ctx: Context<InitializeConfig>, verifier: Pubkey) -> Result<()> {
-        require!(verifier != Pubkey::default(), EscrowError::InvalidVerifier);
+        validate_verifier(&verifier)?;
         ctx.accounts.config.verifier = verifier;
         ctx.accounts.config.bump = ctx.bumps.config;
+        Ok(())
+    }
+    pub fn initialize_control(ctx: Context<InitializeControl>) -> Result<()> {
+        // Separate PDA preserves all previously deployed account layouts.
+        let control = &mut ctx.accounts.control;
+        control.bump = ctx.bumps.control;
+        control.paused = false;
+        control.verifier_epoch = 1;
+        Ok(())
+    }
+    pub fn set_paused(ctx: Context<ManageControl>, paused: bool) -> Result<()> {
+        ctx.accounts.control.paused = paused;
+        emit!(ControlUpdated {
+            authority: ctx.accounts.authority.key(),
+            paused,
+            verifier: ctx.accounts.config.verifier,
+            verifier_epoch: ctx.accounts.control.verifier_epoch,
+        });
+        Ok(())
+    }
+    pub fn rotate_verifier(ctx: Context<ManageControl>, verifier: Pubkey) -> Result<()> {
+        rotate_config(
+            &mut ctx.accounts.config,
+            &mut ctx.accounts.control,
+            verifier,
+        )?;
+        emit!(ControlUpdated {
+            authority: ctx.accounts.authority.key(),
+            paused: ctx.accounts.control.paused,
+            verifier,
+            verifier_epoch: ctx.accounts.control.verifier_epoch,
+        });
         Ok(())
     }
     pub fn initialize_allocation(
         ctx: Context<InitializeAllocation>,
         shares: Vec<Share>,
     ) -> Result<()> {
+        require_running(&ctx.accounts.control)?;
         validate_shares(&shares)?;
         validate_mint(&ctx.accounts.base_mint.to_account_info())?;
         validate_mint(&ctx.accounts.quote_mint.to_account_info())?;
@@ -297,6 +330,7 @@ pub mod oneonly_fee_escrow {
         Ok(())
     }
     pub fn claim(ctx: Context<Claim>, args: ClaimArgs) -> Result<()> {
+        require_claim_control(&ctx.accounts.control, args.verifier_epoch)?;
         let now = Clock::get()?.unix_timestamp;
         require!(args.binding_version == 1, EscrowError::InvalidBinding);
         require!(
@@ -392,6 +426,57 @@ pub mod oneonly_fee_escrow {
     }
 }
 
+// Pubkey::is_on_curve is host-only in the current Solana SDK. Use the same
+// Edwards-point syscall as solana-curve25519 when executing on chain.
+#[cfg(target_os = "solana")]
+fn verifier_on_curve(verifier: &Pubkey) -> bool {
+    let mut result = 0u8;
+    // SAFETY: verifier exposes 32 readable bytes and result is a writable byte.
+    // Curve id 0 is CURVE25519_EDWARDS; syscall success means a valid point.
+    #[allow(deprecated)]
+    unsafe {
+        anchor_lang::solana_program::syscalls::sol_curve_validate_point(
+            0,
+            verifier.as_ref().as_ptr(),
+            &mut result,
+        ) == 0
+    }
+}
+#[cfg(not(target_os = "solana"))]
+fn verifier_on_curve(verifier: &Pubkey) -> bool {
+    verifier.is_on_curve()
+}
+fn validate_verifier(verifier: &Pubkey) -> Result<()> {
+    require!(
+        *verifier != Pubkey::default() && verifier_on_curve(verifier),
+        EscrowError::InvalidVerifier
+    );
+    Ok(())
+}
+fn require_running(control: &Control) -> Result<()> {
+    require!(!control.paused, EscrowError::Paused);
+    Ok(())
+}
+fn require_claim_control(control: &Control, verifier_epoch: u64) -> Result<()> {
+    require_running(control)?;
+    require!(
+        verifier_epoch > 0 && verifier_epoch == control.verifier_epoch,
+        EscrowError::InvalidVerifierEpoch
+    );
+    Ok(())
+}
+fn rotate_config(config: &mut Config, control: &mut Control, verifier: Pubkey) -> Result<()> {
+    validate_verifier(&verifier)?;
+    // An epoch revokes every old authorization, even when a prior key is reused
+    // or a compromised verifier signed a future-dated message before rotation.
+    let next_epoch = control
+        .verifier_epoch
+        .checked_add(1)
+        .ok_or(EscrowError::Overflow)?;
+    config.verifier = verifier;
+    control.verifier_epoch = next_epoch;
+    Ok(())
+}
 fn validate_shares(shares: &[Share]) -> Result<()> {
     require!(
         !shares.is_empty() && shares.len() <= MAX_RECIPIENTS,
@@ -486,6 +571,7 @@ pub fn claim_message(
         &args.nonce,
         &args.issued_at.to_le_bytes(),
         &args.expires_at.to_le_bytes(),
+        &args.verifier_epoch.to_le_bytes(),
     ]
     .concat()
 }
@@ -542,11 +628,37 @@ pub struct InitializeConfig<'info> {
     pub system_program: Program<'info, System>,
 }
 #[derive(Accounts)]
+pub struct InitializeControl<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+    #[account(seeds=[b"config"], bump=config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(init, payer=authority, space=8+1+1+8, seeds=[b"control"], bump)]
+    pub control: Account<'info, Control>,
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ EscrowError::InvalidAuthority)]
+    pub program: Program<'info, crate::program::OneonlyFeeEscrow>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ EscrowError::InvalidAuthority)]
+    pub program_data: Account<'info, ProgramData>,
+    pub system_program: Program<'info, System>,
+}
+#[derive(Accounts)]
+pub struct ManageControl<'info> {
+    pub authority: Signer<'info>,
+    #[account(mut, seeds=[b"config"], bump=config.bump)]
+    pub config: Account<'info, Config>,
+    #[account(mut, seeds=[b"control"], bump=control.bump)]
+    pub control: Account<'info, Control>,
+    #[account(constraint = program.programdata_address()? == Some(program_data.key()) @ EscrowError::InvalidAuthority)]
+    pub program: Program<'info, crate::program::OneonlyFeeEscrow>,
+    #[account(constraint = program_data.upgrade_authority_address == Some(authority.key()) @ EscrowError::InvalidAuthority)]
+    pub program_data: Account<'info, ProgramData>,
+}
+#[derive(Accounts)]
 pub struct InitializeAllocation<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
-    #[account(seeds=[b"config"],bump=config.bump)]
-    pub config: Account<'info, Config>,
+    #[account(seeds=[b"control"], bump=control.bump)]
+    pub control: Account<'info, Control>,
     #[account(init,payer=payer,space=8+32*4+1+4+MAX_RECIPIENTS*34,seeds=[b"allocation",pool.key().as_ref()],bump)]
     pub allocation: Account<'info, Allocation>,
     /// CHECK: discriminator and complete identity checked, CPI validates creator authority.
@@ -615,11 +727,19 @@ pub struct Claim<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+    #[account(seeds=[b"control"], bump=control.bump)]
+    pub control: Account<'info, Control>,
 }
 #[account]
 pub struct Config {
     pub verifier: Pubkey,
     pub bump: u8,
+}
+#[account]
+pub struct Control {
+    pub bump: u8,
+    pub paused: bool,
+    pub verifier_epoch: u64,
 }
 #[account]
 pub struct Allocation {
@@ -667,6 +787,14 @@ pub struct ClaimArgs {
     pub nonce: [u8; 32],
     pub issued_at: i64,
     pub expires_at: i64,
+    pub verifier_epoch: u64,
+}
+#[event]
+pub struct ControlUpdated {
+    pub authority: Pubkey,
+    pub paused: bool,
+    pub verifier: Pubkey,
+    pub verifier_epoch: u64,
 }
 #[event]
 pub struct AllocationCreated {
@@ -716,10 +844,14 @@ pub enum EscrowError {
     Overflow,
     #[msg("Mint extensions are not supported by this escrow version")]
     UnsupportedMint,
-    #[msg("Only program upgrade authority may initialize verifier configuration")]
+    #[msg("Only current program upgrade authority may manage escrow configuration")]
     InvalidAuthority,
     #[msg("Invalid verifier public key")]
     InvalidVerifier,
+    #[msg("Escrow claims and new allocations are paused")]
+    Paused,
+    #[msg("Verifier authorization was revoked; request a fresh claim")]
+    InvalidVerifierEpoch,
 }
 
 #[cfg(test)]

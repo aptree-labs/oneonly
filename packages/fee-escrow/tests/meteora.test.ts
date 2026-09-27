@@ -25,6 +25,7 @@ import {
   FEE_ESCROW_PROGRAM as PROGRAM,
   allocationAddress,
   configAddress,
+  controlAddress,
   initializeAllocationInstruction,
   collectFeesInstruction,
   ledgerAddress,
@@ -165,6 +166,19 @@ beforeEach(async () => {
       discriminator("account", "Config"),
       Keypair.generate().publicKey.toBuffer(),
       Buffer.from([bump]),
+    ]),
+    PROGRAM,
+  );
+  const cb = PublicKey.findProgramAddressSync(
+    [Buffer.from("control")],
+    PROGRAM,
+  )[1];
+  set(
+    controlAddress(),
+    Buffer.concat([
+      discriminator("account", "Control"),
+      Buffer.from([cb, 0]),
+      Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]),
     ]),
     PROGRAM,
   );
@@ -462,4 +476,26 @@ it("rejects DAMM position fees without actual allocation NFT ownership", () => {
   payer.publicKey.toBuffer().copy(b, 32);
   set(d.nft, b, new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"));
   failed(send(d.collection), "InvalidCollection");
+});
+
+it("pauses new allocations before authority transfer and permits safe DBC collection while paused", () => {
+  const controls = data(controlAddress());
+  controls[9] = 1;
+  set(controlAddress(), controls, PROGRAM);
+  failed(send(init()), "Paused");
+  expect(svm.getAccount(address(allocation.toBase58())).exists).toBe(false);
+  expect(
+    codec
+      .decode("virtualPool", data(pool))
+      .poolState.creator.equals(payer.publicKey),
+  ).toBe(true);
+  controls[9] = 0;
+  set(controlAddress(), controls, PROGRAM);
+  success(send(init()));
+  controls[9] = 1;
+  set(controlAddress(), controls, PROGRAM);
+  success(send(collection()));
+  expect(readLedger(ledgerAddress(allocation, quote)).totalReceived).toBe(
+    2000n,
+  );
 });

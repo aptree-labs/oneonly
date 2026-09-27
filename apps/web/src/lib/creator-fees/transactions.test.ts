@@ -115,7 +115,12 @@ beforeEach(async () => {
       expiresAt: new Date(Math.floor(Date.now() / 1000) * 1000 + 600000),
     })
     .returning();
-  mock.runtime.mockResolvedValue({ program, verifier: signer.publicKey });
+  mock.runtime.mockResolvedValue({
+    program,
+    verifier: signer.publicKey,
+    verifierEpoch: 1n,
+    paused: false,
+  });
   mock.verified.mockResolvedValue(c);
   mock.height.mockResolvedValue(100);
   mock.account.mockImplementation(async (key: PublicKey) =>
@@ -201,6 +206,7 @@ it("signs the frozen cumulative cap and exact wallet/mint/nonce scope, then mark
       xIdHash: xIdHash(c.xId),
       cumulativeLimit: 150n,
       bindingVersion: 1n,
+      verifierEpoch: 1n,
       nonce: Buffer.from(c.code.slice(8), "hex"),
       issuedAt: BigInt(c.createdAt.getTime() / 1000),
       expiresAt: BigInt(c.expiresAt.getTime() / 1000),
@@ -248,7 +254,7 @@ it("reuses an unexpired prepared intent without signing or requesting fresh bala
       message: "message",
       blockhash: "blockhash",
       lastValidBlockHeight: 200,
-      details: { challengeId: c.id },
+      details: { challengeId: c.id, verifierEpoch: "1" },
     })
     .returning();
   const result = await prepareCreatorFeeClaim(owner.toBase58(), c.id);
@@ -365,4 +371,27 @@ it("runtime gate blocks all adapters before any chain or transaction activity", 
   ).rejects.toThrow("Not staging devnet");
   expect(mock.account).not.toHaveBeenCalled();
   expect(mock.prepare).not.toHaveBeenCalled();
+});
+
+it("does not reuse an unsubmitted approval from a previous verifier epoch", async () => {
+  await db.insert(transactionIntents).values({
+    network: "devnet",
+    wallet: owner.toBase58(),
+    kind: "creator-fee-claim",
+    transaction: "old-epoch-bytes",
+    message: "message",
+    blockhash: "blockhash",
+    lastValidBlockHeight: 200,
+    details: { challengeId: c.id, verifierEpoch: "1" },
+  });
+  mock.runtime.mockResolvedValue({
+    program,
+    verifier: signer.publicKey,
+    verifierEpoch: 2n,
+    paused: false,
+  });
+  const result = await prepareCreatorFeeClaim(owner.toBase58(), c.id);
+  expect(mock.prepare).toHaveBeenCalledOnce();
+  expect(mock.prepare.mock.calls[0][4].verifierEpoch).toBe("2");
+  expect(result).not.toHaveProperty("transaction", "old-epoch-bytes");
 });

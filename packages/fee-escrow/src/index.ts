@@ -17,7 +17,7 @@ import {
 export const FEE_ESCROW_PROGRAM = new PublicKey(
   "BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4",
 );
-export const CLAIM_DOMAIN = Buffer.from("oneonly:fee-claim:v1:devnet");
+export const CLAIM_DOMAIN = Buffer.from("oneonly:fee:v2:devnet");
 export const xIdHash = (id: string) => {
   if (!/^[1-9][0-9]{0,24}$/.test(id)) throw new Error("Invalid X identity");
   return createHash("sha256").update(`oneonly:x-id:v1:${id}`).digest();
@@ -28,6 +28,8 @@ const pda = (program: PublicKey, ...seeds: Uint8Array[]) =>
   PublicKey.findProgramAddressSync(seeds, program)[0];
 export const configAddress = (program = FEE_ESCROW_PROGRAM) =>
   pda(program, Buffer.from("config"));
+export const controlAddress = (program = FEE_ESCROW_PROGRAM) =>
+  pda(program, Buffer.from("control"));
 export const allocationAddress = (
   pool: PublicKey,
   program = FEE_ESCROW_PROGRAM,
@@ -101,6 +103,70 @@ export function initializeConfigInstruction(
     verifier.toBuffer(),
   );
 }
+/** These administration instructions require the program's current upgrade authority. */
+export function initializeControlInstruction(
+  authority: PublicKey,
+  program = FEE_ESCROW_PROGRAM,
+) {
+  const loader = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+  return instruction(program, "initialize_control", [
+    rw(authority, true),
+    ro(configAddress(program)),
+    rw(controlAddress(program)),
+    ro(program),
+    ro(pda(loader, program.toBytes())),
+    ro(SystemProgram.programId),
+  ]);
+}
+function controlInstruction(
+  authority: PublicKey,
+  name: string,
+  data: Buffer,
+  program: PublicKey,
+) {
+  const loader = new PublicKey("BPFLoaderUpgradeab1e11111111111111111111111");
+  return instruction(
+    program,
+    name,
+    [
+      ro(authority, true),
+      rw(configAddress(program)),
+      rw(controlAddress(program)),
+      ro(program),
+      ro(pda(loader, program.toBytes())),
+    ],
+    data,
+  );
+}
+export function setPausedInstruction(
+  authority: PublicKey,
+  paused: boolean,
+  program = FEE_ESCROW_PROGRAM,
+) {
+  return controlInstruction(
+    authority,
+    "set_paused",
+    Buffer.from([paused ? 1 : 0]),
+    program,
+  );
+}
+export function rotateVerifierInstruction(
+  authority: PublicKey,
+  verifier: PublicKey,
+  program = FEE_ESCROW_PROGRAM,
+) {
+  if (
+    verifier.equals(PublicKey.default) ||
+    !PublicKey.isOnCurve(verifier.toBytes())
+  )
+    throw new Error("Invalid verifier");
+  return controlInstruction(
+    authority,
+    "rotate_verifier",
+    verifier.toBuffer(),
+    program,
+  );
+}
 export function initializeAllocationInstruction(args: {
   payer: PublicKey;
   pool: PublicKey;
@@ -133,7 +199,7 @@ export function initializeAllocationInstruction(args: {
     "initialize_allocation",
     [
       rw(args.payer, true),
-      ro(configAddress(program)),
+      ro(controlAddress(program)),
       rw(allocation),
       rw(args.pool),
       ro(args.dbcConfig),
@@ -197,6 +263,7 @@ export type ClaimArgs = {
   nonce: Buffer;
   issuedAt: bigint;
   expiresAt: bigint;
+  verifierEpoch: bigint;
 };
 function claimArgs(args: ClaimArgs) {
   if (args.xIdHash.length !== 32 || args.nonce.length !== 32)
@@ -208,6 +275,7 @@ function claimArgs(args: ClaimArgs) {
     args.nonce,
     i64(args.issuedAt),
     i64(args.expiresAt),
+    u64(args.verifierEpoch),
   ]);
 }
 export function claimMessage(
@@ -232,6 +300,7 @@ export function claimMessage(
     args.nonce,
     i64(args.issuedAt),
     i64(args.expiresAt),
+    u64(args.verifierEpoch),
   ]);
 }
 export function claimInstructions(args: {
@@ -287,6 +356,7 @@ export function claimInstructions(args: {
         ro(args.tokenProgram),
         ro(ASSOCIATED_TOKEN_PROGRAM_ID),
         ro(SystemProgram.programId),
+        ro(controlAddress(program)),
       ],
       claimArgs(args.claim),
     ),
@@ -314,6 +384,16 @@ export function decodeConfig(
 ) {
   const b = accountData(account, "Config", 41, program);
   return { verifier: key(b, 8), bump: b[40] };
+}
+export function decodeControl(
+  account: AccountInfo<Buffer>,
+  program = FEE_ESCROW_PROGRAM,
+) {
+  const b = accountData(account, "Control", 18, program);
+  if (b[9] !== 0 && b[9] !== 1) throw new Error("Invalid escrow pause state");
+  const verifierEpoch = b.readBigUInt64LE(10);
+  if (verifierEpoch === 0n) throw new Error("Invalid escrow verifier epoch");
+  return { bump: b[8], paused: b[9] === 1, verifierEpoch };
 }
 export function decodeAllocation(
   account: AccountInfo<Buffer>,

@@ -23,6 +23,8 @@ import {
   allocationAddress,
   configAddress,
   decodeConfig,
+  controlAddress,
+  decodeControl,
   decodeAllocation,
   decodeLedger,
   decodeClaimed,
@@ -383,10 +385,15 @@ async function main() {
       before = (await getAccount(conn, dest)).amount;
     } catch {}
     const now = BigInt(Math.floor(Date.now() / 1000));
+    const ci = await conn.getAccountInfo(controlAddress(), "confirmed");
+    if (!ci) throw new Error("Missing escrow controls");
+    const controls = decodeControl(ci);
+    if (controls.paused) throw new Error("Escrow claims are paused");
     const payload = {
       xIdHash: xid,
       cumulativeLimit: cumulative,
       bindingVersion: 1n,
+      verifierEpoch: controls.verifierEpoch,
       nonce: randomBytes(32),
       issuedAt: now - 5n,
       expiresAt: now + 300n,

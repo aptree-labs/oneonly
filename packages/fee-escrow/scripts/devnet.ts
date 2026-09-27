@@ -16,6 +16,9 @@ import {
   configAddress,
   decodeConfig,
   initializeConfigInstruction,
+  initializeControlInstruction,
+  controlAddress,
+  decodeControl,
 } from "../src";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -187,6 +190,17 @@ async function main() {
     });
     console.log("Config transaction:", signature);
   }
+  if (!(await connection.getAccountInfo(controlAddress()))) {
+    await sendAndConfirmTransaction(
+      connection,
+      new Transaction().add(initializeControlInstruction(payer.publicKey)),
+      [payer],
+      { commitment: "confirmed" },
+    );
+  }
+  const control = await connection.getAccountInfo(controlAddress());
+  if (!control || decodeControl(control).paused)
+    throw new Error("Post-deploy control verification failed");
   const config = await connection.getAccountInfo(configAddress());
   if (!config || !decodeConfig(config).verifier.equals(verifier.publicKey))
     throw new Error("Post-deploy config verification failed");

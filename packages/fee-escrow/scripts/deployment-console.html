@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>OneOnly · Devnet deployment</title>
+    <link rel="stylesheet" href="/console.css" />
+  </head>
+  <body>
+    <main>
+      <p class="eyebrow">ONEONLY / LOCAL DEVNET REHEARSAL</p>
+      <h1>Your wallet. Every approval.</h1>
+      <p>
+        Review the build and spending limits, then approve one deployment step
+        at a time in Jupiter.
+      </p>
+      <div id="message" role="status" aria-live="polite">
+        Loading local plan…
+      </div>
+      <section>
+        <h2>Deployment plan</h2>
+        <dl id="plan"></dl>
+        <label
+          ><input id="reviewed" type="checkbox" /> I checked the artifact hash,
+          network, authority and budget.</label
+        >
+      </section>
+      <section>
+        <h2>Progress</h2>
+        <p id="progress">Reading finalized state…</p>
+        <dl id="costs"></dl>
+        <div class="actions">
+          <button id="connect">Connect Jupiter</button
+          ><button id="next" disabled>Review next step</button
+          ><button id="refresh">Check status</button
+          ><button id="rebroadcast" disabled>Rebroadcast pending</button>
+        </div>
+      </section>
+      <section id="approval" hidden>
+        <h2>Approve this step</h2>
+        <dl id="step"></dl>
+        <div class="actions">
+          <button id="sign">Approve in Jupiter</button
+          ><button id="cancel">Cancel preparation</button>
+        </div>
+      </section>
+      <details>
+        <summary>Recover temporary buffer funds</summary>
+        <p>
+          This closes only the temporary upload buffer. Its remaining funds
+          return to the nominated wallet. A new upload will be required if
+          deployment is unfinished.
+        </p>
+        <label
+          ><input id="recovery-check" type="checkbox" /> I want to close the
+          upload buffer and recover its funds.</label
+        ><button id="recover" disabled>Review buffer refund</button>
+      </details>
+      <p class="foot">
+        No wallet private key leaves Jupiter. Mainnet approvals are disabled.
+        Closing this tab does not cancel a transaction already signed.
+      </p>
+    </main>
+    <script src="/console.js" defer></script>
+  </body>
+</html>

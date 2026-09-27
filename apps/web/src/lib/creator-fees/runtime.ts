@@ -2,6 +2,8 @@ import {
   FEE_ESCROW_PROGRAM,
   configAddress,
   decodeConfig,
+  controlAddress,
+  decodeControl,
 } from "@oneonly/fee-escrow";
 import {
   PublicKey,
@@ -13,7 +15,9 @@ import {
 import { fail } from "../launchpad/auth";
 
 /** Opt in only after the deployed devnet program has passed integration checks. */
-export async function creatorFeeRuntime() {
+export async function creatorFeeRuntime(
+  options: { allowPaused?: boolean } = {},
+) {
   if (
     process.env.ONEONLY_ENVIRONMENT !== "staging" ||
     NETWORK !== "devnet" ||
@@ -60,5 +64,22 @@ export async function creatorFeeRuntime() {
   );
   if (!config || !decodeConfig(config, program).verifier.equals(verifier))
     return fail("Fee verifier does not match the deployed program.", 503);
-  return { program, verifier };
+  const controlAccount = await connection().getAccountInfo(
+    controlAddress(program),
+    "confirmed",
+  );
+  if (!controlAccount)
+    return fail("Fee escrow controls are not initialized.", 503);
+  const control = decodeControl(controlAccount, program);
+  if (control.paused && !options.allowPaused)
+    return fail(
+      "Creator fee claims and new allocations are temporarily paused.",
+      503,
+    );
+  return {
+    program,
+    verifier,
+    verifierEpoch: control.verifierEpoch,
+    paused: control.paused,
+  };
 }

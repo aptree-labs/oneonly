@@ -1,6 +1,10 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { Keypair } from "@solana/web3.js";
-import { FEE_ESCROW_PROGRAM, discriminator } from "@oneonly/fee-escrow";
+import {
+  FEE_ESCROW_PROGRAM,
+  discriminator,
+  controlAddress,
+} from "@oneonly/fee-escrow";
 const mock = vi.hoisted(() => ({
   network: "devnet",
   account: vi.fn(),
@@ -37,14 +41,23 @@ beforeEach(() => {
   mock.account.mockImplementation(async (key) =>
     key.equals(FEE_ESCROW_PROGRAM)
       ? { executable: true }
-      : {
-          owner: FEE_ESCROW_PROGRAM,
-          data: Buffer.concat([
-            discriminator("account", "Config"),
-            verifier.toBuffer(),
-            Buffer.from([1]),
-          ]),
-        },
+      : key.equals(controlAddress())
+        ? {
+            owner: FEE_ESCROW_PROGRAM,
+            data: Buffer.concat([
+              discriminator("account", "Control"),
+              Buffer.from([1, 0]),
+              Buffer.from([1, 0, 0, 0, 0, 0, 0, 0]),
+            ]),
+          }
+        : {
+            owner: FEE_ESCROW_PROGRAM,
+            data: Buffer.concat([
+              discriminator("account", "Config"),
+              verifier.toBuffer(),
+              Buffer.from([1]),
+            ]),
+          },
   );
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -89,9 +102,11 @@ it("enables only the deployed devnet program with matching on-chain verifier", a
   expect(await creatorFeeRuntime()).toEqual({
     program: FEE_ESCROW_PROGRAM,
     verifier,
+    verifierEpoch: 1n,
+    paused: false,
   });
   expect(mock.assertNetwork).toHaveBeenCalledOnce();
-  expect(mock.account).toHaveBeenCalledTimes(2);
+  expect(mock.account).toHaveBeenCalledTimes(3);
 });
 
 it.each([
@@ -111,3 +126,20 @@ it.each([
     expect(mock.assertNetwork).not.toHaveBeenCalled();
   },
 );
+
+it("fails closed when emergency controls are absent or paused, but permits collection/reconciliation while paused", async () => {
+  const base = mock.account.getMockImplementation()!;
+  mock.account.mockImplementation(async (key) =>
+    key.equals(controlAddress()) ? null : base(key),
+  );
+  await expect(creatorFeeRuntime()).rejects.toThrow(
+    "controls are not initialized",
+  );
+  mock.account.mockImplementation(async (key) => {
+    const account = await base(key);
+    if (key.equals(controlAddress())) account.data[9] = 1;
+    return account;
+  });
+  await expect(creatorFeeRuntime()).rejects.toThrow("temporarily paused");
+  expect((await creatorFeeRuntime({ allowPaused: true })).paused).toBe(true);
+});

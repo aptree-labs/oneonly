@@ -52,7 +52,7 @@ export async function prepareCreatorFeeCollection(
   tokenId: string,
   venue: "dbc" | "damm-v2" = "dbc",
 ) {
-  const { program } = await creatorFeeRuntime(),
+  const { program } = await creatorFeeRuntime({ allowPaused: true }),
     pool = await feePool(tokenId);
   if (pool.program !== program.toBase58())
     throw new FeeError("Escrow program mismatch.", 409);
@@ -70,7 +70,7 @@ export async function prepareCreatorFeeClaim(
   wallet: string,
   challengeId: string,
 ) {
-  const { program, verifier } = await creatorFeeRuntime(),
+  const { program, verifier, verifierEpoch } = await creatorFeeRuntime(),
     c = await verifiedFeeChallenge(wallet, challengeId),
     pool = await feePool(c.tokenId);
   if (
@@ -106,6 +106,7 @@ export async function prepareCreatorFeeClaim(
     .limit(1);
   if (
     existing &&
+    existing.details.verifierEpoch === verifierEpoch.toString() &&
     ["prepared", "submitted"].includes(existing.status) &&
     (await connection().getBlockHeight("confirmed")) <=
       existing.lastValidBlockHeight
@@ -168,6 +169,7 @@ export async function prepareCreatorFeeClaim(
     nonce,
     issuedAt: BigInt(Math.floor(c.createdAt.getTime() / 1000)),
     expiresAt: BigInt(Math.floor(c.expiresAt.getTime() / 1000)),
+    verifierEpoch,
   };
   const message = claimMessage(
     args,
@@ -205,6 +207,7 @@ export async function prepareCreatorFeeClaim(
     c.tokenId,
     {
       action: "Claim your creator fee share",
+      verifierEpoch: verifierEpoch.toString(),
       challengeId,
       output: `Up to ${formatUnits(c.amountAtomic, balance.decimals)} ${balance.symbol}`,
       destination: wallet,
@@ -230,7 +233,7 @@ export async function reconcileCreatorFeeClaim(
   challengeId: string,
   confirmedSignature?: string,
 ) {
-  const { program } = await creatorFeeRuntime(),
+  const { program } = await creatorFeeRuntime({ allowPaused: true }),
     db = await getDatabase();
   const [c] = await db
     .select()
