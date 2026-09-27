@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { randomBytes } from "node:crypto";
+import { walletSessionCookie } from "@/lib/x-session";
 import { signXLink, type XLink } from "@/lib/x-link";
 const calls = vi.hoisted(() => ({
   wallet: vi.fn(),
@@ -40,7 +41,11 @@ afterEach(() => vi.unstubAllEnvs());
 const callback = (value: XLink, extra = "") =>
   new NextRequest(
     `https://staging.oneonly.lol/api/launchpad/x-callback?profile=${encodeURIComponent(signXLink(value))}${extra}`,
-    { headers: { cookie: `oneonly-x-link=${value.nonce}` } },
+    {
+      headers: {
+        cookie: `oneonly-x-link=${value.nonce}; ${walletSessionCookie()}=test-wallet-session`,
+      },
+    },
   );
 it("returns to the signed fee dashboard only after wallet-bound OAuth verification", async () => {
   const result = await GET(

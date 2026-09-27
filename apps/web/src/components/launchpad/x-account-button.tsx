@@ -41,7 +41,10 @@ export function XAccountButton() {
       await app.authenticate();
       const tokenId =
         pathname.match(/^\/app\/token\/([0-9a-f-]{36})\/?$/)?.[1] ?? "";
-      const result = await api<{ url: string }>("link-x", { tokenId });
+      const result = await api<{ url: string }>("link-x", {
+        tokenId,
+        ...(pathname === "/app/creator-fees" ? { returnTo: pathname } : {}),
+      });
       window.location.assign(result.url);
     } catch (error) {
       app.setNotice((error as Error).message);

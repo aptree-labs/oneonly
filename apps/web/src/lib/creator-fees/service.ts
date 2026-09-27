@@ -1,3 +1,4 @@
+import { hasXSessionProof } from "../x-session";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
   getDatabase,
@@ -189,9 +190,18 @@ export async function bindFeeWallet(wallet: string, database?: Database) {
     return existing;
   }
   // A historical social profile is not sufficient proof for a new, permanent
-  // financial binding. linkedAt is written only by the verified OAuth callback.
+  // financial binding. Reuse the OAuth proof for this exact signed wallet
+  // session, identity and profile revision. A new session cannot inherit it.
+  // Keep the brief legacy window for callbacks completed before this rollout.
   const proofAge = Date.now() - profile.linkedAt.getTime();
-  if (!Number.isFinite(proofAge) || proofAge < 0 || proofAge > 600_000)
+  if (
+    (!Number.isFinite(proofAge) || proofAge < 0 || proofAge > 600_000) &&
+    !(await hasXSessionProof({
+      wallet,
+      xId: profile.xId,
+      verifiedAt: profile.linkedAt.getTime(),
+    }))
+  )
     throw new FeeError(
       "Reconnect your X account to confirm ownership before linking this claim wallet.",
       409,
