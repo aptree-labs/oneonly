@@ -21,6 +21,7 @@ import { FeeError, lookupX, verifyXPost, type FeeProfile } from "./provider";
 import { creatorFeeRuntime } from "./runtime";
 import { readCreatorFeeBalances } from "./balances";
 import { cachedFeeBalances, recipientFeeTotals } from "./projections";
+import { publicCache } from "../cache/public-cache";
 export { FeeError } from "./provider";
 export const feeFeatureEnabled = () =>
   process.env.ONEONLY_ENVIRONMENT === "staging" &&
@@ -34,15 +35,31 @@ export function assertFeeFeature() {
 }
 export async function feeStatus() {
   const enabled = feeFeatureEnabled();
-  let escrowAvailable = false;
-  if (enabled) {
-    try {
-      await creatorFeeRuntime();
-      escrowAvailable = true;
-    } catch {
-      /* fail closed */
-    }
-  }
+  // Display-only readiness: financial operations still validate the runtime and
+  // authoritative balances afresh. Coalesce probes across visitors/instances.
+  const configured = enabled && process.env.CREATOR_FEES_ENABLED === "true";
+  const identity = createHash("sha256")
+    .update(
+      JSON.stringify([
+        process.env.CREATOR_FEE_PROGRAM_ID,
+        process.env.CREATOR_FEE_VERIFIER_PUBLIC_KEY,
+      ]),
+    )
+    .digest("hex");
+  const escrowAvailable = configured
+    ? await publicCache(
+        `creator-fee-readiness:v1:${identity}`,
+        { fresh: 5, stale: 0 },
+        async () => {
+          try {
+            await creatorFeeRuntime();
+            return true;
+          } catch {
+            return false;
+          }
+        },
+      )
+    : false;
   return {
     enabled,
     network: "devnet",
@@ -153,6 +170,32 @@ export async function bindFeeWallet(wallet: string, database?: Database) {
     throw new FeeError(
       "Connect your X account before binding this wallet.",
       409,
+    );
+  const [existing] = await db
+    .select()
+    .from(creatorFeeBindings)
+    .where(
+      and(
+        eq(creatorFeeBindings.network, "devnet"),
+        eq(creatorFeeBindings.wallet, wallet),
+      ),
+    );
+  if (existing) {
+    if (existing.xId !== profile.xId)
+      throw new FeeError(
+        "This wallet is already bound. Automatic reassignment is disabled.",
+        409,
+      );
+    return existing;
+  }
+  // A historical social profile is not sufficient proof for a new, permanent
+  // financial binding. linkedAt is written only by the verified OAuth callback.
+  const proofAge = Date.now() - profile.linkedAt.getTime();
+  if (!Number.isFinite(proofAge) || proofAge < 0 || proofAge > 600_000)
+    throw new FeeError(
+      "Reconnect your X account to confirm ownership before linking this claim wallet.",
+      409,
+      "x_reauthentication_required",
     );
   await db
     .insert(creatorFeeProfiles)

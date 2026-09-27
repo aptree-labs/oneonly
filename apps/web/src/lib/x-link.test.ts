@@ -71,3 +71,34 @@ it("only renders X-hosted profile images", () => {
   ])
     expect(safeXAvatar(value)).toBeNull();
 });
+
+it("allows only the signed creator-fees return page", () => {
+  vi.stubEnv("X_LINK_SECRET", randomBytes(32).toString("hex"));
+  const value = {
+    purpose: "request" as const,
+    nonce: randomBytes(32).toString("base64url"),
+    wallet: "9rHYpiomWrMNhMb76BabYWzCVMYudBXqhHuQqJBRMrcR",
+    tokenId: "",
+    expires: Date.now() + 60_000,
+    returnTo: "/app/creator-fees" as const,
+  };
+  expect(readXLink(signXLink(value), "request").returnTo).toBe(
+    "/app/creator-fees",
+  );
+  for (const returnTo of [
+    "https://evil.test",
+    "//evil.test",
+    "/app/creator-fees?next=evil",
+    "/app/creator-fees/../other",
+    "/app",
+  ]) {
+    expect(() =>
+      readXLink(signXLink({ ...value, returnTo } as never), "request"),
+    ).toThrow();
+  }
+  const [, signature] = signXLink(value).split(".");
+  const payload = Buffer.from(
+    JSON.stringify({ ...value, returnTo: undefined }),
+  ).toString("base64url");
+  expect(() => readXLink(`${payload}.${signature}`, "request")).toThrow();
+});

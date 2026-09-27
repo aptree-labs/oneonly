@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { LaunchError } from "@oneonly/core";
 const calls = vi.hoisted(() => ({
+  enabled: vi.fn(),
   gate: vi.fn(),
   status: vi.fn(),
   profile: vi.fn(),
@@ -16,6 +17,7 @@ vi.mock("@/lib/creator-fees/service", async () => {
   return {
     FeeError,
     feeStatus: calls.status,
+    feeFeatureEnabled: calls.enabled,
     assertFeeFeature: calls.gate,
     findFeeProfile: calls.profile,
     feeDashboard: vi.fn(),
@@ -49,6 +51,8 @@ import { GET, POST } from "./route";
 beforeEach(() => {
   vi.clearAllMocks();
   calls.gate.mockReset();
+  calls.enabled.mockReturnValue(true);
+  calls.rate.mockReset();
   calls.origin.mockReset();
   calls.wallet.mockReset().mockResolvedValue("signed-wallet");
   calls.status.mockResolvedValue({ enabled: false });
@@ -62,6 +66,7 @@ const request = (path: string, body: unknown) =>
     body: JSON.stringify(body),
   });
 it("rejects feature requests before lookup when production gating fails", async () => {
+  calls.enabled.mockReturnValue(false);
   calls.gate.mockImplementation(() => {
     throw new LaunchError({ message: "Not available", status: 404 });
   });
@@ -108,4 +113,39 @@ it("blocks unsigned wallet claims before preparation", async () => {
       .status,
   ).toBe(401);
   expect(calls.claim).not.toHaveBeenCalled();
+});
+
+it("rate limits public staging status before probing runtime and fails closed", async () => {
+  calls.rate.mockRejectedValue(
+    new LaunchError({ message: "Too many requests", status: 429 }),
+  );
+  const result = await GET(
+    new Request("https://staging.oneonly.lol/api/creator-fees/status", {
+      headers: { "x-forwarded-for": "192.0.2.1, 192.0.2.2" },
+    }),
+    context("status"),
+  );
+  expect(result.status).toBe(429);
+  expect(calls.rate).toHaveBeenCalledExactlyOnceWith(
+    "creator-fees:status:192.0.2.1",
+    30,
+  );
+  expect(calls.status).not.toHaveBeenCalled();
+});
+it("blocks unsigned permanent binding and returns a stable reconnect code", async () => {
+  calls.wallet.mockRejectedValue(
+    new LaunchError({ message: "Sign in", status: 401 }),
+  );
+  expect((await POST(request("bind", {}), context("bind"))).status).toBe(401);
+  expect(calls.bind).not.toHaveBeenCalled();
+  calls.wallet.mockResolvedValue("signed-wallet");
+  const { FeeError } = await import("@/lib/creator-fees/provider");
+  calls.bind.mockRejectedValue(
+    new FeeError("Reconnect X", 409, "x_reauthentication_required"),
+  );
+  const result = await POST(request("bind", {}), context("bind"));
+  expect(result.status).toBe(409);
+  expect(await result.json()).toMatchObject({
+    code: "x_reauthentication_required",
+  });
 });

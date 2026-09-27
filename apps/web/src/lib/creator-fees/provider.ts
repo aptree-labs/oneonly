@@ -3,6 +3,7 @@ export class FeeError extends Error {
   constructor(
     message: string,
     public status = 400,
+    public code?: "x_reauthentication_required",
   ) {
     super(message);
   }

@@ -75,16 +75,41 @@ export async function feeMarket(pool: string, program: PublicKey) {
     allocation = allocationAddress(new PublicKey(pool), program);
   if (!market.virtual.poolState.creator.equals(allocation))
     throw new ProtocolError("Pool fees are not owned by the escrow.");
-  const positions = market.state
+  // Anyone can donate a position NFT to the allocation. The SDK verifies NFT
+  // ownership and filters positions to this pool; an exact-count check lets an
+  // empty donation block all claims. Include donated fees, as the program does,
+  // and select a funded position without relying on RPC/SDK enumeration order.
+  const owned = market.state
     ? await dammClient().getUserPositionByPool(market.address, allocation)
     : [];
-  if (market.state && positions.length !== 1)
-    throw new ProtocolError(
-      "The graduated creator position could not be verified.",
-    );
-  const fees = market.state
-    ? getUnClaimLpFee(market.state, positions[0].positionState)
-    : null;
+  const unique = new Map(
+    owned.map((position) => [position.position.toBase58(), position]),
+  );
+  const ranked = [...unique.values()]
+    .map((position) => {
+      const fees = getUnClaimLpFee(market.state!, position.positionState);
+      return {
+        position,
+        base: BigInt(fees.feeTokenA.toString()),
+        quote: BigInt(fees.feeTokenB.toString()),
+      };
+    })
+    .sort((a, b) => {
+      if (a.quote !== b.quote) return a.quote > b.quote ? -1 : 1;
+      if (a.base !== b.base) return a.base > b.base ? -1 : 1;
+      return Buffer.compare(
+        a.position.position.toBuffer(),
+        b.position.position.toBuffer(),
+      );
+    });
+  const positions = ranked.map(({ position }) => position);
+  const pendingDamm = ranked.reduce(
+    (total, fees) => ({
+      base: total.base + fees.base,
+      quote: total.quote + fees.quote,
+    }),
+    { base: 0n, quote: 0n },
+  );
   return {
     ...market,
     allocation,
@@ -93,10 +118,7 @@ export async function feeMarket(pool: string, program: PublicKey) {
       base: BigInt(market.virtual.poolState.creatorBaseFee.toString()),
       quote: BigInt(market.virtual.poolState.creatorQuoteFee.toString()),
     },
-    pendingDamm: {
-      base: BigInt(fees?.feeTokenA.toString() ?? "0"),
-      quote: BigInt(fees?.feeTokenB.toString() ?? "0"),
-    },
+    pendingDamm,
   };
 }
 export async function buildFeeCollection(
@@ -127,6 +149,13 @@ export async function buildFeeCollection(
     });
   } else {
     if (!market.state) throw new ProtocolError("This pool has not graduated.");
+    if (
+      !market.positions.length ||
+      (market.pendingDamm.base === 0n && market.pendingDamm.quote === 0n)
+    )
+      throw new ProtocolError(
+        "No graduated position fees are available to collect.",
+      );
     source = CP_AMM_PROGRAM_ID;
     const position = market.positions[0],
       state = market.state;
