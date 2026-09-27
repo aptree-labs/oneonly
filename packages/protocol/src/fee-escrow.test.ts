@@ -35,7 +35,11 @@ vi.mock("./index", async () => ({
   dammClient: () => mock.damm,
   tradingPool: mock.market,
 }));
-import { appendFeeAllocation, buildFeeCollection } from "./fee-escrow";
+import {
+  appendFeeAllocation,
+  buildFeeCollection,
+  feeMarket,
+} from "./fee-escrow";
 const key = () => Keypair.generate().publicKey;
 const program = key(),
   pool = key(),
@@ -317,4 +321,138 @@ it("refuses allocation initialization on mainnet", async () => {
     }),
   ).rejects.toThrow("devnet preview");
   expect(rpc.getAccountInfo).not.toHaveBeenCalled();
+});
+
+async function donatedPosition(baseFees = 0, quoteFees = 0) {
+  const [original] = await damm.getUserPositionByPool(dammPool, allocation);
+  return {
+    ...original,
+    position: key(),
+    positionNftAccount: key(),
+    positionState: {
+      ...original.positionState,
+      pool: dammPool,
+      feeAPending: new BN(baseFees),
+      feeBPending: new BN(quoteFees),
+    },
+  };
+}
+
+it.each([true, false])(
+  "ignores an empty donated position regardless of ordering (%s)",
+  async (donationFirst) => {
+    market(NATIVE_MINT, true);
+    const [original] = await damm.getUserPositionByPool(dammPool, allocation);
+    const donation = await donatedPosition();
+    vi.mocked(damm.getUserPositionByPool).mockResolvedValue(
+      donationFirst ? [donation, original] : [original, donation],
+    );
+    const summary = await feeMarket(pool.toBase58(), program);
+    expect(summary.pendingDamm).toEqual({ base: 56n, quote: 78n });
+    const builder = vi.spyOn(damm, "claimPositionFee");
+    await buildFeeCollection(
+      pool.toBase58(),
+      wallet.toBase58(),
+      program,
+      "damm-v2",
+    );
+    expect(builder.mock.calls[0][0].position).toEqual(position);
+    expect(builder.mock.calls[0][0].positionNftAccount).toEqual(nft);
+  },
+);
+
+it("aggregates funded donations and collects the largest pending quote position first", async () => {
+  market(NATIVE_MINT, true);
+  const [original] = await damm.getUserPositionByPool(dammPool, allocation);
+  const donation = await donatedPosition(9, 100);
+  vi.mocked(damm.getUserPositionByPool).mockResolvedValue([original, donation]);
+  expect((await feeMarket(pool.toBase58(), program)).pendingDamm).toEqual({
+    base: 65n,
+    quote: 178n,
+  });
+  const builder = vi.spyOn(damm, "claimPositionFee");
+  await buildFeeCollection(
+    pool.toBase58(),
+    wallet.toBase58(),
+    program,
+    "damm-v2",
+  );
+  expect(builder.mock.calls[0][0].position).toEqual(donation.position);
+  // The next call must progress to the remaining funded position.
+  donation.positionState.feeAPending = new BN(0);
+  donation.positionState.feeBPending = new BN(0);
+  await buildFeeCollection(
+    pool.toBase58(),
+    wallet.toBase58(),
+    program,
+    "damm-v2",
+  );
+  expect(builder.mock.calls[1][0].position).toEqual(position);
+});
+
+it("uses base fees and then position bytes to break ties, never enumeration order", async () => {
+  market(NATIVE_MINT, true);
+  const low = await donatedPosition(4, 0);
+  const high = await donatedPosition(5, 0);
+  const tie = await donatedPosition(5, 0);
+  const expected = [high, tie].sort((a, b) =>
+    Buffer.compare(a.position.toBuffer(), b.position.toBuffer()),
+  );
+  for (const rows of [
+    [low, high, tie],
+    [tie, high, low],
+  ]) {
+    vi.mocked(damm.getUserPositionByPool).mockResolvedValue(rows);
+    expect(
+      (await feeMarket(pool.toBase58(), program)).positions.map(
+        (p) => p.position,
+      ),
+    ).toEqual([...expected, low].map((p) => p.position));
+  }
+});
+
+it("does not let empty or missing graduated positions block residual DBC fees", async () => {
+  market(NATIVE_MINT, true);
+  const donation = await donatedPosition();
+  for (const rows of [[donation], []]) {
+    vi.mocked(damm.getUserPositionByPool).mockResolvedValue(rows);
+    expect((await feeMarket(pool.toBase58(), program)).pendingDamm).toEqual({
+      base: 0n,
+      quote: 0n,
+    });
+    await expect(
+      buildFeeCollection(pool.toBase58(), wallet.toBase58(), program, "dbc"),
+    ).resolves.toBeDefined();
+    await expect(
+      buildFeeCollection(
+        pool.toBase58(),
+        wallet.toBase58(),
+        program,
+        "damm-v2",
+      ),
+    ).rejects.toThrow("No graduated position fees");
+  }
+});
+
+it("uses SDK pool filtering so an owned position from another pool is excluded", async () => {
+  market(NATIVE_MINT, true);
+  const [original] = await damm.getUserPositionByPool(dammPool, allocation);
+  original.positionState.pool = dammPool;
+  const other = await donatedPosition(900, 900);
+  other.positionState.pool = key();
+  vi.mocked(damm.getUserPositionByPool).mockRestore();
+  vi.spyOn(damm, "getPositionsByUser").mockResolvedValue([other, original]);
+  const summary = await feeMarket(pool.toBase58(), program);
+  expect(summary.positions.map((p) => p.position)).toEqual([position]);
+  expect(summary.pendingDamm).toEqual({ base: 56n, quote: 78n });
+});
+
+it("does not double-count a duplicate position returned by RPC", async () => {
+  market(NATIVE_MINT, true);
+  const [original] = await damm.getUserPositionByPool(dammPool, allocation);
+  vi.mocked(damm.getUserPositionByPool).mockResolvedValue([original, original]);
+  expect((await feeMarket(pool.toBase58(), program)).pendingDamm).toEqual({
+    base: 56n,
+    quote: 78n,
+  });
 });

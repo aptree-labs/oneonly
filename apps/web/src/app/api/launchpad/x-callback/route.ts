@@ -5,6 +5,7 @@ import { origin, session } from "@/lib/launchpad/auth";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   let tokenId = "",
+    returnTo: "/app/creator-fees" | undefined,
     result = "failed";
   try {
     const data = readXLink(
@@ -12,6 +13,7 @@ export async function GET(request: NextRequest) {
       "profile",
     );
     tokenId = data.tokenId;
+    returnTo = data.returnTo;
     const currentWallet = await session();
     const linkWallet = currentWallet ?? (await session("oneonly-x-session"));
     if (
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
   }
   const response = NextResponse.redirect(
     new URL(
-      `${tokenId ? `/app/token/${tokenId}` : "/app"}?x=${result}${tokenId ? "#comments" : ""}`,
+      `${returnTo ?? (tokenId ? `/app/token/${tokenId}` : "/app")}?x=${result}${!returnTo && tokenId ? "#comments" : ""}`,
       origin(),
     ),
   );

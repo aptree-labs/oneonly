@@ -15,6 +15,14 @@ export type FeeStatus = {
   bindingAvailable: boolean;
   escrowAvailable: boolean;
 };
+export class FeeApiError extends Error {
+  constructor(
+    message: string,
+    public code?: string,
+  ) {
+    super(message);
+  }
+}
 export async function feeApi<T>(
   path: string,
   body?: unknown,
@@ -35,7 +43,10 @@ export async function feeApi<T>(
     throw new Error("Creator fees are temporarily unavailable. Try again.");
   });
   if (!response.ok)
-    throw new Error(result.error || "Couldn’t complete that request.");
+    throw new FeeApiError(
+      result.error || "Couldn’t complete that request.",
+      result.code,
+    );
   return result as T;
 }
 export function useFeeStatus() {

@@ -10,6 +10,10 @@ import {
   eq,
   type Database,
 } from "@oneonly/db";
+vi.mock("../cache/public-cache", () => ({
+  publicCache: (_key: string, _policy: unknown, load: () => Promise<unknown>) =>
+    load(),
+}));
 vi.mock("./runtime", () => ({
   creatorFeeRuntime: vi.fn().mockRejectedValue(new Error("not deployed")),
 }));
@@ -46,6 +50,7 @@ afterEach(() => vi.unstubAllEnvs());
 function enable() {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
   vi.stubEnv("SOLANA_NETWORK", "devnet");
+  vi.stubEnv("CREATOR_FEES_ENABLED", "true");
 }
 async function seed(xId: string, wallet: string) {
   await db
@@ -283,4 +288,43 @@ it("distinguishes current OAuth profile from immutable financial beneficiary", a
   expect(
     await resolveFeeAllocation([{ xId: "802", shareBps: 10000 }], db),
   ).toHaveLength(1);
+});
+
+it("requires fresh OAuth for a new permanent binding but preserves idempotent retries", async () => {
+  enable();
+  await seed("901", "wallet901");
+  for (const linkedAt of [
+    new Date(Date.now() - 600_001),
+    new Date(Date.now() + 60_000),
+  ]) {
+    await db
+      .update(walletProfiles)
+      .set({ linkedAt })
+      .where(eq(walletProfiles.wallet, "wallet901"));
+    await expect(bindFeeWallet("wallet901", db)).rejects.toMatchObject({
+      status: 409,
+      code: "x_reauthentication_required",
+    });
+    expect(
+      await db
+        .select()
+        .from(creatorFeeBindings)
+        .where(eq(creatorFeeBindings.wallet, "wallet901")),
+    ).toHaveLength(0);
+  }
+  await db
+    .update(walletProfiles)
+    .set({ linkedAt: new Date() })
+    .where(eq(walletProfiles.wallet, "wallet901"));
+  const binding = await bindFeeWallet("wallet901", db);
+  await db
+    .update(walletProfiles)
+    .set({ linkedAt: new Date(0) })
+    .where(eq(walletProfiles.wallet, "wallet901"));
+  expect(await bindFeeWallet("wallet901", db)).toEqual(binding);
+  await db
+    .update(walletProfiles)
+    .set({ xId: "902" })
+    .where(eq(walletProfiles.wallet, "wallet901"));
+  await expect(bindFeeWallet("wallet901", db)).rejects.toThrow("already bound");
 });

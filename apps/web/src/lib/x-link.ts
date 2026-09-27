@@ -4,6 +4,7 @@ export type XLink = {
   nonce: string;
   wallet: string;
   tokenId: string;
+  returnTo?: "/app/creator-fees";
   expires: number;
   xId?: string;
   username?: string;
@@ -35,6 +36,7 @@ export function readXLink(value: string, purpose: XLink["purpose"]): XLink {
     data.expires > Date.now() + 600_000 ||
     !/^[A-Za-z0-9_-]{43}$/.test(data.nonce) ||
     !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(data.wallet) ||
+    (data.returnTo !== undefined && data.returnTo !== "/app/creator-fees") ||
     typeof data.tokenId !== "string" ||
     (data.tokenId !== "" &&
       !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(

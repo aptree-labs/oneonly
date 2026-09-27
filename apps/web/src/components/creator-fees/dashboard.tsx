@@ -8,9 +8,9 @@ import {
   LoaderCircle,
   RefreshCw,
 } from "lucide-react";
-import { feeApi, useFeeStatus, type FeeProfile } from "./client";
+import { feeApi, FeeApiError, useFeeStatus, type FeeProfile } from "./client";
 import { FeeIdentity } from "./profile";
-import { useLaunchpad, type Intent } from "../launchpad/provider";
+import { api, useLaunchpad, type Intent } from "../launchpad/provider";
 import "./creator-fees.css";
 type Balance = {
   mint: string;
@@ -49,6 +49,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [needsXReconnect, setNeedsXReconnect] = useState(false);
   const lastTransaction = useRef(app.transactionRevision);
   useEffect(() => {
     if (lastTransaction.current === app.transactionRevision) return;
@@ -80,6 +81,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
   useEffect(() => {
     if (recipient) return;
     setAccount(null);
+    setNeedsXReconnect(false);
     if (!app.wallet || !status?.enabled) return;
     const controller = new AbortController();
     // Reuse an existing signed session without opening the wallet on page load.
@@ -139,13 +141,33 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
   async function bind() {
     setLoading(true);
     setError("");
+    setNeedsXReconnect(false);
     try {
       await app.authenticate();
       await feeApi("bind", {});
       setAccount(await feeApi<Account>("me"));
     } catch (error) {
       setError((error as Error).message);
+      setNeedsXReconnect(
+        error instanceof FeeApiError &&
+          error.code === "x_reauthentication_required",
+      );
     } finally {
+      setLoading(false);
+    }
+  }
+  async function reconnectX() {
+    setLoading(true);
+    setError("");
+    try {
+      await app.authenticate();
+      const result = await api<{ url: string }>("link-x", {
+        tokenId: "",
+        returnTo: "/app/creator-fees",
+      });
+      window.location.assign(result.url);
+    } catch (error) {
+      setError((error as Error).message);
       setLoading(false);
     }
   }
@@ -207,6 +229,15 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
             <p className="lp-error" role="alert">
               {error}
             </p>
+          )}
+          {!recipient && needsXReconnect && !account?.binding && (
+            <button
+              className="lp-secondary"
+              disabled={loading || !status.bindingAvailable}
+              onClick={() => void reconnectX()}
+            >
+              {loading ? "Connecting…" : "Reconnect X"}
+            </button>
           )}
           {!status.escrowAvailable && (
             <p className="lp-notice">

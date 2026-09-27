@@ -523,7 +523,9 @@ async function handle(request: Request, path: string[]) {
     if (action === "logout") return response(await logout());
     const wallet = await requireWallet();
     if (action === "link-x")
-      return response(await beginXLink(wallet, string(body.tokenId)));
+      return response(
+        await beginXLink(wallet, string(body.tokenId), body.returnTo),
+      );
     if (action === "buyer")
       return response(await verifyBuyer(wallet, string(body.tokenId)));
     if (action === "comment") return response(await postComment(wallet, body));

@@ -7,6 +7,7 @@ import {
 } from "@/lib/creator-fees/transactions";
 import {
   feeStatus,
+  feeFeatureEnabled,
   assertFeeFeature,
   findFeeProfile,
   feeDashboard,
@@ -37,8 +38,14 @@ async function route(
     const { path } = await context.params,
       [action, id] = path,
       url = new URL(request.url);
-    if (request.method === "GET" && action === "status")
+    if (request.method === "GET" && action === "status") {
+      if (feeFeatureEnabled())
+        await rateLimit(
+          `creator-fees:status:${request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local"}`,
+          30,
+        );
       return response(await feeStatus());
+    }
     assertFeeFeature();
     if (request.method === "GET") {
       const offset = Number(url.searchParams.get("offset") || 0);
@@ -117,7 +124,15 @@ async function route(
     return response({ error: "Not found." }, 404);
   } catch (error) {
     if (error instanceof FeeError || error instanceof LaunchError)
-      return response({ error: error.message }, error.status);
+      return response(
+        {
+          error: error.message,
+          ...(error instanceof FeeError && error.code
+            ? { code: error.code }
+            : {}),
+        },
+        error.status,
+      );
     return response(
       {
         error:
