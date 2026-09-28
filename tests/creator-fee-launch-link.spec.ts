@@ -128,7 +128,7 @@ test("a creator can link X without losing the launch draft or uploading before t
   await page
     .getByRole("textbox", { name: "Token name", exact: true })
     .fill("My draft");
-  await page.getByPlaceholder("YOURS", { exact: true }).fill("DRAFT");
+  await page.getByRole("textbox", { name: /^Ticker/ }).fill("DRAFT");
   await page.getByLabel("Token image", { exact: true }).setInputFiles({
     name: "pixel.png",
     mimeType: "image/png",
@@ -170,7 +170,7 @@ test("a creator can link X without losing the launch draft or uploading before t
   await expect(
     page.getByRole("textbox", { name: "Token name", exact: true }),
   ).toHaveValue("My draft");
-  await expect(page.getByPlaceholder("YOURS", { exact: true })).toHaveValue(
+  await expect(page.getByRole("textbox", { name: /^Ticker/ })).toHaveValue(
     "DRAFT",
   );
   await expect(page.getByAltText("Token image preview")).toBeVisible();
