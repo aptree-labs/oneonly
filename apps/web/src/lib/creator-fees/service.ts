@@ -80,7 +80,11 @@ export async function findFeeProfile(
   database?: Database,
 ): Promise<FeeProfile> {
   assertFeeFeature();
-  const profile = await lookupX(handle),
+  const profile = await publicCache(
+      `creator-fees:profile:v1:${handle.trim().toLowerCase()}`,
+      { fresh: 60, stale: 0 },
+      () => lookupX(handle),
+    ),
     db = database ?? (await getDatabase());
   await db
     .insert(creatorFeeProfiles)
@@ -416,6 +420,7 @@ export async function feeRecipient(
   xId: string,
   database?: Database,
   offset = 0,
+  profileOnly = false,
 ) {
   assertFeeFeature();
   const db = database ?? (await getDatabase());
@@ -424,7 +429,12 @@ export async function feeRecipient(
     .from(creatorFeeProfiles)
     .where(eq(creatorFeeProfiles.xId, xId));
   if (!profile) throw new FeeError("Recipient not found.", 404);
-  return { profile, ...(await allocationsFor(xId, db, offset)) };
+  return {
+    profile,
+    ...(profileOnly
+      ? { allocations: [], hasMore: false }
+      : await allocationsFor(xId, db, offset)),
+  };
 }
 export async function feeRecipients(
   query: string,
@@ -440,25 +450,31 @@ export async function feeRecipients(
       username: creatorFeeProfiles.username,
       name: creatorFeeProfiles.name,
       avatar: creatorFeeProfiles.avatar,
-      tokenCount: sql<number>`count(*)::int`,
+      tokenCount: sql<number>`count(${creatorFeePools.tokenId})::int`,
     })
     .from(creatorFeeProfiles)
-    .innerJoin(
+    .leftJoin(
       creatorFeeAllocations,
       eq(creatorFeeAllocations.xId, creatorFeeProfiles.xId),
     )
-    .innerJoin(
+    .leftJoin(
       creatorFeePools,
-      eq(creatorFeePools.tokenId, creatorFeeAllocations.tokenId),
+      and(
+        eq(creatorFeePools.tokenId, creatorFeeAllocations.tokenId),
+        eq(creatorFeePools.network, NETWORK),
+      ),
     )
     .where(
       and(
-        eq(creatorFeePools.network, NETWORK),
         sql`position(lower(${term}) in lower(${creatorFeeProfiles.username} || ' ' || ${creatorFeeProfiles.name})) > 0`,
       ),
     )
     .groupBy(creatorFeeProfiles.xId)
-    .orderBy(desc(sql`count(*)`), creatorFeeProfiles.xId)
+    .having(term ? undefined : sql`count(${creatorFeePools.tokenId}) > 0`)
+    .orderBy(
+      desc(sql`count(${creatorFeePools.tokenId})`),
+      creatorFeeProfiles.xId,
+    )
     .limit(25)
     .offset(offset);
   const totals = await recipientFeeTotals(

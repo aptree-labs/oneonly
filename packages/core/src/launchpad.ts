@@ -93,7 +93,7 @@ export function projectUrl(
 export function normalizeTicker(raw: string): string {
   if (/[^\x00-\x7F]/.test(raw))
     throw new LaunchError({
-      message: "Use ASCII letters and numbers only.",
+      message: "Use ASCII ticker characters only.",
       status: 400,
     });
   const ticker = raw
@@ -101,10 +101,9 @@ export function normalizeTicker(raw: string): string {
     .replace(/^\$/, " ")
     .replace(/\s/g, "")
     .toUpperCase();
-  if (!/^[A-Z0-9]{1,10}$/.test(ticker))
+  if (!/^[A-Z0-9=+_,><\/?-]{1,10}$/.test(ticker))
     throw new LaunchError({
-      message:
-        "Use 1–10 letters or numbers for your ticker. Unicode look-alikes aren’t allowed.",
+      message: "Use 1–10 letters, numbers or symbols (-=+_,></?).",
       status: 400,
     });
   return ticker;

@@ -15,7 +15,7 @@ export function isReservedPlatformTicker(raw: string): boolean {
   const ticker = raw
     .trim()
     .replace(/^\$/, "")
-    .replace(/\s/g, "")
+    .replace(/[\s=+_,><\/?-]/g, "")
     .toUpperCase()
     .replace(/^[1IL](?=[O0]N)/, "ONE")
     .replace(/0/g, "O")

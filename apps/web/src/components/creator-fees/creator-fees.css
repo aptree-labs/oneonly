@@ -370,3 +370,44 @@
 .cf-split .cf-unallocated {
   border: 0;
 }
+
+.cf-creator-result {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--lp-border);
+}
+.cf-creator-result:last-child {
+  border-bottom: 0;
+}
+.cf-creator-result .cf-recipient-row {
+  border: 0;
+  padding-top: 0;
+  padding-bottom: 8px;
+}
+.cf-creator-launch {
+  display: inline-block;
+  margin-left: 54px;
+  font-size: 12px;
+}
+.cf-creator-rank {
+  min-width: 30px;
+  font-size: 13px;
+  color: var(--lp-muted);
+}
+.cf-creator-lookup {
+  margin-top: 12px;
+}
+.cf-creator-lookup .cf-creator-result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cf-ranking-note {
+  margin-top: 16px;
+}
+@media (max-width: 600px) {
+  .cf-creator-launch {
+    margin-left: 42px;
+  }
+}

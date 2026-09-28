@@ -10,6 +10,9 @@ import {
 describe("official platform identity", () => {
   it.each([
     "ONEONLY",
+    "ONE_ONLY",
+    "ONE/ONLY",
+    "1=ONLY",
     "1only",
     "10nly",
     "$ one only",

@@ -4092,3 +4092,42 @@ body:has(.launchpad[data-theme="dark"])
   padding: 20px 0;
   color: var(--lp-muted, #6b7960);
 }
+
+.lp-card-recipients {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+.lp-card-recipients > .lp-caption {
+  flex-basis: 100%;
+}
+.lp-card-recipients a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 7px;
+  border: 1px solid var(--lp-border);
+  border-radius: 20px;
+  font-size: 11px;
+}
+.lp-card-recipients a:hover {
+  background: var(--lp-surface);
+}
+.lp-card-recipients img {
+  width: 20px;
+  height: 20px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+.lp-card-recipients a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lp-card-recipients small {
+  opacity: 0.75;
+  white-space: nowrap;
+}

@@ -103,7 +103,7 @@ export const guides: Guide[] = [
         id: "prepare",
         title: "Choose your ticker",
         paragraphs: [
-          "Open Launch a token, add an image and name, then enter a ticker. The form checks availability. Tickers use 1–10 letters or numbers; a leading $ is not part of the symbol.",
+          "Open Launch a token, add an image and name, then enter a ticker. The form checks availability. Tickers use 1–10 letters, numbers or symbols (-=+_,></?); a leading $ is not part of the symbol.",
         ],
         bullets: [
           "Choose one of the pairing assets currently enabled in the form.",

@@ -14,11 +14,16 @@ export default async function Page({
     typeof params.ticker === "string" ? params.ticker : "",
     typeof params.quote === "string" ? params.quote : "SOL",
   );
+  const creator =
+    typeof params.creator === "string" && /^[1-9]\d{0,24}$/.test(params.creator)
+      ? params.creator
+      : "";
   return (
     <CreateToken
-      key={`${ticker}:${quote}`}
+      key={`${ticker}:${quote}:${creator}`}
       initialTicker={ticker}
       initialQuote={quote}
+      initialCreator={creator}
     />
   );
 }

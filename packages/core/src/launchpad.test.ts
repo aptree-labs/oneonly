@@ -58,7 +58,9 @@ describe("launchpad rules", () => {
   });
   it("canonicalizes ASCII tickers and rejects Unicode before case folding", () => {
     expect(normalizeTicker(" $ so l ")).toBe("SOL");
-    for (const value of ["ſOL", "ß", "ЅOL", "💥", "a-b", ""]) {
+    expect(normalizeTicker("-=+_,></?")).toBe("-=+_,></?");
+    expect(normalizeTicker("a-b")).toBe("A-B");
+    for (const value of ["ſOL", "ß", "ЅOL", "💥", "a*b", ""]) {
       expect(() => normalizeTicker(value)).toThrow();
     }
   });

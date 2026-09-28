@@ -1,4 +1,4 @@
-import { isReservedPlatformTicker } from "@oneonly/core";
+import { isReservedPlatformTicker, normalizeTicker } from "@oneonly/core";
 const pairs = new Set([
   "SOL",
   "USDC",
@@ -11,9 +11,14 @@ const pairs = new Set([
   "CRCLX",
 ]);
 export function createPrefill(ticker: string, pair: string) {
-  const normalized = ticker.trim().replace(/^\$/, "").toUpperCase();
+  let normalized = "";
+  try {
+    normalized = normalizeTicker(ticker);
+  } catch {
+    /* Search text need not be a valid ticker. */
+  }
   return {
-    ticker: /^[A-Z0-9]{1,10}$/.test(normalized) ? normalized : "",
+    ticker: normalized,
     quote: pairs.has(pair) ? pair : "SOL",
   };
 }
@@ -22,4 +27,9 @@ export function createTickerHref(ticker: string, pair: string) {
   return value.ticker && !isReservedPlatformTicker(value.ticker)
     ? `/app/create?${new URLSearchParams(value)}`
     : null;
+}
+
+export function createCreatorHref(xId: string, pair = "SOL") {
+  if (!/^[1-9]\d{0,24}$/.test(xId)) return null;
+  return `/app/create?${new URLSearchParams({ creator: xId, quote: createPrefill("", pair).quote })}`;
 }

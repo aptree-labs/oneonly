@@ -8,6 +8,9 @@ import {
   tokenTrades,
   marketListings,
   marketCandles,
+  creatorFeeProfiles,
+  creatorFeePools,
+  creatorFeeAllocations,
 } from "./index";
 const now = new Date("2026-09-12T12:00:00Z");
 let local: Awaited<ReturnType<typeof createLocalDatabase>>;
@@ -250,17 +253,51 @@ it("USD candles use recorded execution values and omit missing prices", async ()
 });
 
 it("pins the official mainnet mint ahead of sorting before pagination", async () => {
-  const official = { ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: PLATFORM_TOKEN_MINT, pool: "official-pool", ticker: "ONEONLY", activatedAt: new Date("2025-01-01") };
-  const others = Array.from({ length: 25 }, (_, i) => ({ ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: `other-mainnet-${i}`, pool: `other-pool-${i}`, ticker: `OTHER${i}`, activatedAt: now }));
+  const official = {
+    ...tokens[0],
+    id: randomUUID(),
+    network: "mainnet-beta",
+    mint: PLATFORM_TOKEN_MINT,
+    pool: "official-pool",
+    ticker: "ONEONLY",
+    activatedAt: new Date("2025-01-01"),
+  };
+  const others = Array.from({ length: 25 }, (_, i) => ({
+    ...tokens[0],
+    id: randomUUID(),
+    network: "mainnet-beta",
+    mint: `other-mainnet-${i}`,
+    pool: `other-pool-${i}`,
+    ticker: `OTHER${i}`,
+    activatedAt: now,
+  }));
   await local.db.insert(launchTokens).values([official, ...others]);
-  for (const sort of ["newest", "volume", "market-cap", "recent-buys"] as const) {
-    const first = await marketListings(local.db, { ...options, network: "mainnet-beta", sort });
-    const second = await marketListings(local.db, { ...options, network: "mainnet-beta", sort, page: 1 });
+  for (const sort of [
+    "newest",
+    "volume",
+    "market-cap",
+    "recent-buys",
+  ] as const) {
+    const first = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+    });
+    const second = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+      page: 1,
+    });
     expect(first.tokens[0].id).toBe(official.id);
     expect(first.total).toBe(26);
     expect(second.tokens.some((t) => t.id === official.id)).toBe(false);
   }
-  const search = await marketListings(local.db, { ...options, network: "mainnet-beta", search: "OTHER" });
+  const search = await marketListings(local.db, {
+    ...options,
+    network: "mainnet-beta",
+    search: "OTHER",
+  });
   expect(search.tokens.some((t) => t.id === official.id)).toBe(false);
 });
 
@@ -328,13 +365,64 @@ it("does not turn entirely unpriced trades into zero volume or complete history"
 
 it("does not mark a mixed-price subtotal complete even with fully indexed curve history", async () => {
   await local.db.insert(tokenTrades).values({
-    tokenId: tokens[4].id, signature: "mixed-curve-priced", eventIndex: 0,
-    wallet: "fixture", side: "buy", baseAmount: "1", quoteAmount: "2",
-    priceQuote: "2", volumeUsd: 200, blockTime: new Date(now.getTime() - 1000),
+    tokenId: tokens[4].id,
+    signature: "mixed-curve-priced",
+    eventIndex: 0,
+    wallet: "fixture",
+    side: "buy",
+    baseAmount: "1",
+    quoteAmount: "2",
+    priceQuote: "2",
+    volumeUsd: 200,
+    blockTime: new Date(now.getTime() - 1000),
   });
-  const result = await marketListings(local.db, { ...options, search: tokens[4].mint });
+  const result = await marketListings(local.db, {
+    ...options,
+    search: tokens[4].mint,
+  });
   const row = result.tokens.find((token) => token.id === tokens[4].id)!;
   expect(row.volumeUsd24h).toBe(200);
   expect(row.volumeUnpricedTrades).toBe(1);
   expect(row.volumeComplete).toBe(false);
+});
+
+it("finds tokens by fee recipient without duplicates and returns card recipient identities", async () => {
+  await local.db.insert(creatorFeeProfiles).values([
+    { xId: "1001", username: "example", name: "Example Creator" },
+    { xId: "1002", username: "example2", name: "Example Two" },
+  ]);
+  await local.db
+    .insert(creatorFeePools)
+    .values({
+      tokenId: tokens[0].id,
+      network: "devnet",
+      pool: tokens[0].pool,
+      mint: tokens[0].mint,
+      escrow: "escrow",
+      program: "program",
+    });
+  await local.db.insert(creatorFeeAllocations).values([
+    { tokenId: tokens[0].id, xId: "1001", shareBps: 7000 },
+    { tokenId: tokens[0].id, xId: "1002", shareBps: 3000 },
+  ]);
+  const result = await marketListings(local.db, {
+    ...options,
+    search: "@example",
+  });
+  expect(result.total).toBe(1);
+  expect(
+    result.tokens[0].feeRecipients.map((r) => [r.username, r.shareBps]),
+  ).toEqual([
+    ["example", 7000],
+    ["example2", 3000],
+  ]);
+  expect(
+    (
+      await marketListings(local.db, {
+        ...options,
+        search: "@example",
+        pair: "USDC",
+      })
+    ).tokens,
+  ).toHaveLength(0);
 });

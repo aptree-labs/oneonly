@@ -21,6 +21,13 @@ export type Token = {
   status: string;
   activatedAt: string;
   balance?: string;
+  feeRecipients?: {
+    xId: string;
+    username: string;
+    name: string;
+    avatar: string | null;
+    shareBps: number;
+  }[];
   marketCapUsd?: number | null;
   priceUsd?: number | null;
   reserveUsd?: number | null;
@@ -117,6 +124,33 @@ export function TokenCard({
             <Copy size={13} aria-hidden="true" />
           )}
         </button>
+        {app.staging && !!token.feeRecipients?.length && (
+          <div
+            className="lp-card-recipients"
+            aria-label="Creator fee recipients"
+          >
+            <span className="lp-caption">Fees to</span>
+            {token.feeRecipients.map((profile) => (
+              <Link
+                key={profile.xId}
+                prefetch={false}
+                href={`/app/creator-fees?recipient=${profile.xId}`}
+                title={`${profile.name} · ${profile.shareBps / 100}% of creator fees`}
+              >
+                {profile.avatar?.startsWith("https://") && (
+                  <img
+                    src={profile.avatar}
+                    alt=""
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                )}
+                <span>@{profile.username}</span>
+                <small>{profile.shareBps / 100}%</small>
+              </Link>
+            ))}
+          </div>
+        )}
         <div className="lp-row lp-card-metric">
           <span>
             {token.marketCapUsd === undefined

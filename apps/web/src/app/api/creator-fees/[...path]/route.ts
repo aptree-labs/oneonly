@@ -1,3 +1,7 @@
+import { creatorRankings } from "@/lib/creator-fees/rankings";
+import { displayReferences } from "@/lib/launchpad/discovery";
+import { getDatabase } from "@oneonly/db";
+import { NETWORK, quoteAssets } from "@oneonly/protocol";
 import { after } from "next/server";
 import { warmFeeSnapshots } from "@/lib/creator-fees/projections";
 import {
@@ -55,12 +59,45 @@ async function route(
         `creator-fees:read:${request.headers.get("x-forwarded-for")?.split(",")[0] ?? "local"}`,
         30,
       );
+      if (action === "leaderboard") {
+        const sort = url.searchParams.get("sort") || "fees";
+        if (sort !== "fees" && sort !== "tokens")
+          throw new FeeError("Invalid creator sort.");
+        after(async () => {
+          await warmFeeSnapshots().catch(() => {});
+        });
+        const references = await displayReferences();
+        const prices = Object.fromEntries(
+          quoteAssets().flatMap((asset) => {
+            const usd = references?.[asset.symbol];
+            return usd && Number.isFinite(usd) && usd > 0
+              ? [[asset.symbol, { mint: asset.mint, usd }]]
+              : [];
+          }),
+        );
+        return response(
+          await creatorRankings(await getDatabase(), {
+            network: NETWORK,
+            query: url.searchParams.get("query") || "",
+            offset,
+            sort,
+            prices,
+          }),
+        );
+      }
       if (action === "profiles")
         return response({
           profiles: [await findFeeProfile(url.searchParams.get("q") ?? "")],
         });
       if (action === "recipients" && id)
-        return response(await feeRecipient(id, undefined, offset));
+        return response(
+          await feeRecipient(
+            id,
+            undefined,
+            offset,
+            url.searchParams.get("profileOnly") === "true",
+          ),
+        );
       if (action === "recipients") {
         after(async () => {
           await warmFeeSnapshots().catch(() => {});

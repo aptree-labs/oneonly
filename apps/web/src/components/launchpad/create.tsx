@@ -2,7 +2,11 @@
 import Link from "next/link";
 import { readCreateDraft, serializeCreateDraft } from "@/lib/create-draft";
 import { AllocationEditor } from "../creator-fees/allocation-editor";
-import type { FeeRecipient } from "../creator-fees/client";
+import {
+  feeApi,
+  type FeeProfile,
+  type FeeRecipient,
+} from "../creator-fees/client";
 import { Select } from "./select";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { prepareTokenImage } from "@/lib/token-image";
@@ -30,9 +34,11 @@ type Config = {
 export function CreateToken({
   initialTicker = "",
   initialQuote = "SOL",
+  initialCreator = "",
 }: {
   initialTicker?: string;
   initialQuote?: string;
+  initialCreator?: string;
 }) {
   const app = useLaunchpad(),
     [config, setConfig] = useState<Config | null>(null),
@@ -59,6 +65,48 @@ export function CreateToken({
     [error, setError] = useState("");
   const [feeRecipients, setFeeRecipients] = useState<FeeRecipient[]>([]);
   const [feeAllocationValid, setFeeAllocationValid] = useState(true);
+  const [creatorPrefillError, setCreatorPrefillError] = useState("");
+  const [creatorPrefillBusy, setCreatorPrefillBusy] =
+    useState(!!initialCreator);
+  const [creatorPrefillRetry, setCreatorPrefillRetry] = useState(0);
+  useEffect(() => {
+    if (!initialCreator || !app.staging) {
+      setCreatorPrefillBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    setCreatorPrefillBusy(true);
+    setCreatorPrefillError("");
+    feeApi<{ profile: FeeProfile }>(
+      `recipients/${initialCreator}?profileOnly=true`,
+      undefined,
+      controller.signal,
+    )
+      .then(({ profile }) => {
+        if (controller.signal.aborted) return;
+        setFeeRecipients((rows) =>
+          rows.some((row) => row.xId === profile.xId)
+            ? rows
+            : [
+                ...rows,
+                {
+                  ...profile,
+                  shareBps: Math.max(
+                    0,
+                    10000 - rows.reduce((sum, row) => sum + row.shareBps, 0),
+                  ),
+                },
+              ],
+        );
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) setCreatorPrefillError(error.message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setCreatorPrefillBusy(false);
+      });
+    return () => controller.abort();
+  }, [initialCreator, app.staging, creatorPrefillRetry]);
   const imageSelection = useRef(0);
   useEffect(() => {
     setXSource("link");
@@ -67,7 +115,7 @@ export function CreateToken({
   const restoredDraft = useRef(false);
   const draftKey = `oneonly:create-draft:${app.network}:${app.staging ? "staging" : "production"}`;
   useEffect(() => {
-    if (!app.wallet || restoredDraft.current) return;
+    if (!app.wallet || restoredDraft.current || initialCreator) return;
     restoredDraft.current = true;
     try {
       const draft = readCreateDraft(
@@ -94,7 +142,7 @@ export function CreateToken({
     } catch {
       /* A blocked storage API must not prevent starting a new launch. */
     }
-  }, [app.wallet, draftKey]);
+  }, [app.wallet, draftKey, initialCreator]);
   useEffect(() => {
     const save = (event: Event) => {
       try {
@@ -231,7 +279,13 @@ export function CreateToken({
   }
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (imageBusy || !feeAllocationValid) return;
+    if (
+      imageBusy ||
+      !feeAllocationValid ||
+      creatorPrefillBusy ||
+      !!creatorPrefillError
+    )
+      return;
     setBusy(true);
     setError("");
     try {
@@ -366,7 +420,7 @@ export function CreateToken({
                 }
                 aria-live="polite"
               >
-                {availability || "1–10 letters or numbers"}
+                {availability || "1–10 letters, numbers or symbols (-=+_,></?)"}
                 {existingToken && (
                   <>
                     {" "}
@@ -472,6 +526,23 @@ export function CreateToken({
               </label>
             </div>
           </div>
+          {creatorPrefillBusy && (
+            <p className="lp-caption" role="status">
+              Adding creator…
+            </p>
+          )}
+          {creatorPrefillError && (
+            <p className="lp-error" role="alert">
+              {creatorPrefillError}{" "}
+              <button
+                type="button"
+                className="cf-text-button"
+                onClick={() => setCreatorPrefillRetry((v) => v + 1)}
+              >
+                Retry
+              </button>
+            </p>
+          )}
           <AllocationEditor
             value={feeRecipients}
             onChange={setFeeRecipients}
@@ -612,6 +683,8 @@ export function CreateToken({
               busy ||
               imageBusy ||
               !feeAllocationValid ||
+              creatorPrefillBusy ||
+              !!creatorPrefillError ||
               !enabled ||
               availability !== "Available"
             }

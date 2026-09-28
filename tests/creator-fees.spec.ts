@@ -282,10 +282,11 @@ test("a linked recipient must verify a new post before a claim can proceed", asy
     page.getByRole("button", { name: "Claim fees", exact: true }),
   ).toBeDisabled();
   await expect(
-    page.getByText("X post verification is not available yet. Fee claims are paused."),
+    page.getByText(
+      "X post verification is not available yet. Fee claims are paused.",
+    ),
   ).toBeVisible();
   expect(claims).toBe(0);
-
 });
 
 test("recipient rankings keep different assets separate and mark partial coverage", async ({
@@ -302,13 +303,17 @@ test("recipient rankings keep different assets separate and mark partial coverag
       },
     }),
   );
-  await page.route("**/api/creator-fees/recipients?*", (r) =>
+  await page.route("**/api/creator-fees/leaderboard?*", (r) =>
     r.fulfill({
       json: {
-        recipients: [
+        creators: [
           {
             ...profile,
             tokenCount: 3,
+            rank: 1,
+            feesUsd: null,
+            observedTokens: 2,
+            freshTokens: 1,
             balanceStatus: "partial",
             lastUpdated: "2026-09-26T10:00:00Z",
             coverage: { fresh: 1, observed: 2, total: 3 },
@@ -335,13 +340,12 @@ test("recipient rankings keep different assets separate and mark partial coverag
     }),
   );
   await page.goto("/app/leaderboard");
-  await page
-    .getByRole("button", { name: "Fee recipients", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Creators", exact: true }).click();
   const recipient = page.locator(".cf-recipient-row");
-  await expect(recipient).toContainText("3 tokens");
-  await expect(recipient).toContainText("1.5 SOL · 2 USDC");
-  await expect(recipient).toContainText("Last known · partial");
+  await expect(recipient).toContainText("3 linked tokens");
+  await expect(recipient).toContainText("1.5 SOL to claim");
+  await expect(recipient).toContainText("2 USDC to claim");
+  await expect(recipient).toContainText("Fees updating");
   await expect(recipient).toHaveAttribute(
     "href",
     "/app/creator-fees?recipient=100",

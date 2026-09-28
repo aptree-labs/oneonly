@@ -1,11 +1,16 @@
 import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
-import { and, asc, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lt, sql, inArray } from "drizzle-orm";
 import {
   launchTokens,
   poolSnapshots,
   tokenTrades,
   graduatedIndexes,
 } from "./schema";
+import {
+  creatorFeeAllocations,
+  creatorFeeProfiles,
+  creatorFeePools,
+} from "./creator-fees-schema";
 import type { Database } from "./index";
 
 export type MarketSort =
@@ -146,7 +151,11 @@ export async function marketListings(
             )
           : undefined,
         term
-          ? sql`strpos(lower(${launchTokens.ticker} || ' ' || ${launchTokens.name} || ' ' || ${launchTokens.mint}), ${term}) > 0`
+          ? sql`(strpos(lower(${launchTokens.ticker} || ' ' || ${launchTokens.name} || ' ' || ${launchTokens.mint}), ${term}) > 0
+            or exists (select 1 from creator_fee_allocations a join creator_fee_profiles p on p.x_id=a.x_id
+              join creator_fee_pools f on f.token_id=a.token_id
+              where a.token_id=${launchTokens.id} and f.network=${options.network}
+              and strpos(lower(p.username || ' ' || p.name), ${term.replace(/^@/, "")}) > 0))`
           : undefined,
       ),
     )
@@ -159,6 +168,36 @@ export async function marketListings(
     )
     .limit(24)
     .offset(options.page * 24);
+  const recipients = rows.length
+    ? await db
+        .select({
+          tokenId: creatorFeeAllocations.tokenId,
+          xId: creatorFeeProfiles.xId,
+          username: creatorFeeProfiles.username,
+          name: creatorFeeProfiles.name,
+          avatar: creatorFeeProfiles.avatar,
+          shareBps: creatorFeeAllocations.shareBps,
+        })
+        .from(creatorFeeAllocations)
+        .innerJoin(
+          creatorFeeProfiles,
+          eq(creatorFeeProfiles.xId, creatorFeeAllocations.xId),
+        )
+        .innerJoin(
+          creatorFeePools,
+          eq(creatorFeePools.tokenId, creatorFeeAllocations.tokenId),
+        )
+        .where(
+          and(
+            inArray(
+              creatorFeeAllocations.tokenId,
+              rows.map((row) => row.token.id),
+            ),
+            eq(creatorFeePools.network, options.network),
+          ),
+        )
+        .orderBy(desc(creatorFeeAllocations.shareBps), creatorFeeProfiles.xId)
+    : [];
   return {
     tokens: rows.map(
       ({
@@ -170,6 +209,9 @@ export async function marketListings(
         graduatedIndex,
       }) => ({
         ...token,
+        feeRecipients: recipients
+          .filter((row) => row.tokenId === token.id)
+          .map(({ tokenId, ...profile }) => profile),
         snapshot,
         marketCapUsd,
         volumeUsd24h,

@@ -8,7 +8,7 @@ import {
   Trophy,
   UserRound,
 } from "lucide-react";
-import { RecipientList } from "../creator-fees/recipients";
+import { CreatorLeaderboard } from "../creator-fees/leaderboard";
 import NumberFlow from "@number-flow/react";
 import type { LeaderboardPeriod, TraderLeaderboard } from "@oneonly/db";
 import { api, short, useLaunchpad } from "./provider";
@@ -87,7 +87,7 @@ export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
     <section className="lp-leaderboard">
       <header className="lp-office-heading">
         <div>
-          <span className="lp-kicker">ONE ONLY · TOP TRADERS</span>
+          <span className="lp-kicker">ONE ONLY · LEADERBOARD</span>
           <h1>
             The <em>Leaderboard.</em>
           </h1>
@@ -113,12 +113,12 @@ export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
             aria-pressed={tab === "recipients"}
             onClick={() => setTab("recipients")}
           >
-            Fee recipients
+            Creators
           </button>
         </div>
       )}
       {tab === "recipients" && staging ? (
-        <RecipientList />
+        <CreatorLeaderboard />
       ) : (
         <>
           <div className="lp-leaderboard-toolbar">

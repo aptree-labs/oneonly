@@ -49,6 +49,8 @@ vi.mock("./provider", async (original) => ({
 }));
 import {
   feeDashboard,
+  feeRecipients,
+  feeRecipient,
   createFeeChallenge,
   bindFeeWallet,
   claimScopeHash,
@@ -509,4 +511,21 @@ it("consumes an internal test grant once across concurrent requests and challeng
   await expect(verifiedFeeChallenge("wallet9901", id, db)).rejects.toThrow(
     "fresh post",
   );
+});
+
+it("discovers profiles with no allocations and loads prefill without on-chain reads", async () => {
+  enable();
+  await db
+    .insert(creatorFeeProfiles)
+    .values({ xId: "99001", username: "newcreator", name: "New Creator" });
+  const results = await feeRecipients("@newcreator", 0, db);
+  expect(results.recipients.map((r) => [r.xId, r.tokenCount])).toEqual([
+    ["99001", 0],
+  ]);
+  const profile = await feeRecipient("99001", db, 0, true);
+  expect(profile.profile.username).toBe("newcreator");
+  expect(profile.allocations).toEqual([]);
+  expect(
+    (await feeRecipients("", 0, db)).recipients.some((r) => r.xId === "99001"),
+  ).toBe(false);
 });

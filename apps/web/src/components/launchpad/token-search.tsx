@@ -51,6 +51,7 @@ function ageLabel(date: string) {
 }
 
 export function TokenSearch() {
+  const { staging } = useLaunchpad();
   const [open, setOpen] = useState(false);
   const [initialPair, setInitialPair] = useState("All");
   const dialog = useRef<HTMLDialogElement>(null);
@@ -111,7 +112,7 @@ export function TokenSearch() {
         onClick={() => show()}
       >
         <Search size={18} aria-hidden="true" />
-        <span>Search tokens</span>
+        <span>{staging ? "Search tokens or creators" : "Search tokens"}</span>
         <kbd>⌘ / Ctrl K</kbd>
       </button>
       <dialog
@@ -216,12 +217,12 @@ function SearchContents({
           ref={input}
           aria-label={
             staging
-              ? "Search tokens or X fee recipients"
+              ? "Search tokens or creators"
               : "Search name, ticker, or contract address"
           }
           placeholder={
             staging
-              ? "Search tokens or @accounts"
+              ? "Search tokens or @creators"
               : "Search name, ticker, or contract address"
           }
           autoComplete="off"
@@ -352,7 +353,14 @@ function SearchContents({
         </div>
       </div>
       <div className="lp-token-search-scroll" ref={list}>
-        {staging && <RecipientList query={search} compact onChoose={onClose} />}
+        {staging && (
+          <RecipientList
+            query={search}
+            pair={pair}
+            compact
+            onChoose={onClose}
+          />
+        )}
         <div role="status" className="lp-search-status" aria-live="polite">
           {busy ? (
             <>
