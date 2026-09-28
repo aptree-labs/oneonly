@@ -116,6 +116,7 @@ export type PostChallenge = {
   xId: string;
   code: string;
   proofUrl?: string;
+  legacyProofUrl?: string;
   createdAt: Date;
   expiresAt: Date;
 };
@@ -157,22 +158,26 @@ export function verifyPostEvidence(
   // X replaces posted links with t.co URLs. Use only this post's own URL
   // entities, never profile/quoted-post links or arbitrary redirect fetching.
   const urls = Array.isArray(entities?.urls) ? entities.urls : [];
-  const hasProofLink =
-    !!challenge.proofUrl &&
-    (words.includes(challenge.proofUrl) ||
+  const proofUrls = [challenge.proofUrl, challenge.legacyProofUrl].filter(
+    (url): url is string => !!url,
+  );
+  const hasProofLink = proofUrls.some(
+    (proofUrl) =>
+      words.includes(proofUrl) ||
       urls.some((entry: unknown) => {
         if (!entry || typeof entry !== "object") return false;
         const url = entry as Record<string, unknown>;
         return (
           typeof url.url === "string" &&
           words.includes(url.url) &&
-          url.expanded_url === challenge.proofUrl
+          url.expanded_url === proofUrl
         );
-      }));
+      }),
+  );
   // Keep already-issued code-only challenges usable during their short lifetime.
   if (!hasProofLink && !words.includes(challenge.code))
     throw new FeeError(
-      "The post must include the provided token link. Copy the post and try again.",
+      "The post must include the provided OneOnly link. Copy the post and try again.",
     );
   return { tweetId: id, publishedAt: new Date(published) };
 }

@@ -120,7 +120,15 @@ test("creator rankings show total earnings and both sort modes", async ({
 }, info) => {
   test.setTimeout(90000);
   await page.goto("/app/leaderboard");
-  await page.getByRole("button", { name: "Creators", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Creators", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page
+      .getByRole("group", { name: "Leaderboard type" })
+      .getByRole("button")
+      .first(),
+  ).toHaveText("Creators");
   const board = page.getByRole("region", { name: "Creator leaderboard" });
   await expect(board.getByText("$100 earned")).toBeVisible();
   await expect(board.getByText(/to claim|unclaimed|Fees updating/)).toHaveCount(

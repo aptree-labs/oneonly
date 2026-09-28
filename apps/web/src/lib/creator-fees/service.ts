@@ -1,5 +1,9 @@
 import { verifyInternalTestProof } from "./test-proof";
-import { creatorFeePost, tokenShareUrl } from "../token-sharing";
+import {
+  creatorFeePost,
+  creatorFeeShareUrl,
+  tokenShareUrl,
+} from "../token-sharing";
 import { hasXSessionProof } from "../x-session";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import {
@@ -616,12 +620,8 @@ export async function createFeeChallenge(
     createdAt,
     expiresAt,
   };
-  const [token] = await db
-    .select({ ticker: launchTokens.ticker })
-    .from(launchTokens)
-    .where(eq(launchTokens.id, input.tokenId));
   await db.insert(creatorFeeChallenges).values(challenge);
-  const postText = creatorFeePost(input.tokenId, challenge.id, token?.ticker);
+  const postText = creatorFeePost(challenge.id);
   return {
     id: challenge.id,
     postText,
@@ -694,7 +694,8 @@ export async function verifyFeeChallenge(
     verifyInternalTestProof(tweetUrl, c) ??
     (await verifyXPost(tweetUrl, {
       ...c,
-      proofUrl: tokenShareUrl(c.tokenId, c.id),
+      proofUrl: creatorFeeShareUrl(c.id),
+      legacyProofUrl: tokenShareUrl(c.tokenId, c.id),
     }));
   try {
     const updated = await db

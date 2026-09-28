@@ -20,13 +20,15 @@ const periods = [
 ] as const;
 export function Leaderboard({
   initial,
-  initialTab = "traders",
+  initialTab = "recipients",
 }: {
   initial?: TraderLeaderboard;
   initialTab?: "traders" | "recipients";
 }) {
   const { wallet, network, staging } = useLaunchpad();
-  const [tab, setTab] = useState<"traders" | "recipients">(initialTab);
+  const [tab, setTab] = useState<"traders" | "recipients">(
+    staging ? initialTab : "traders",
+  );
   const [period, setPeriod] = useState<LeaderboardPeriod>("24h");
   const [data, setData] = useState(initial);
   const [loading, setLoading] = useState(!initial);
@@ -109,17 +111,17 @@ export function Leaderboard({
         <div className="cf-tabs" role="group" aria-label="Leaderboard type">
           <button
             type="button"
-            aria-pressed={tab === "traders"}
-            onClick={() => setTab("traders")}
-          >
-            Traders
-          </button>
-          <button
-            type="button"
             aria-pressed={tab === "recipients"}
             onClick={() => setTab("recipients")}
           >
             Creators
+          </button>
+          <button
+            type="button"
+            aria-pressed={tab === "traders"}
+            onClick={() => setTab("traders")}
+          >
+            Traders
           </button>
         </div>
       )}

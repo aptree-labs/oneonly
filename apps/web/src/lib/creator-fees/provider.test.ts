@@ -167,3 +167,41 @@ describe("token-link claim proof", () => {
     ).toThrow();
   });
 });
+
+it("verifies the Explore proof and keeps in-flight token proofs valid", () => {
+  const exploreUrl = "https://oneonly.lol/app?share=claim-1";
+  const current = {
+    ...challenge,
+    proofUrl: exploreUrl,
+    legacyProofUrl: proofUrl,
+  };
+  const explorePost = {
+    ...linkedPost,
+    text: "Claimed creator fees on @oneonlylol. https://t.co/abc",
+    entities: { urls: [{ url: "https://t.co/abc", expanded_url: exploreUrl }] },
+  };
+  expect(verifyPostEvidence(explorePost, "456", current, now).tweetId).toBe(
+    "456",
+  );
+  expect(verifyPostEvidence(linkedPost, "456", current, now).tweetId).toBe(
+    "456",
+  );
+  expect(() =>
+    verifyPostEvidence(
+      {
+        ...explorePost,
+        entities: {
+          urls: [
+            {
+              url: "https://t.co/abc",
+              expanded_url: exploreUrl.replace("claim-1", "claim-2"),
+            },
+          ],
+        },
+      },
+      "456",
+      current,
+      now,
+    ),
+  ).toThrow();
+});

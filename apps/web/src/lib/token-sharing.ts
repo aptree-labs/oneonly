@@ -16,10 +16,15 @@ export function tokenShareUrl(tokenId: string, shareId?: string) {
   return url.toString();
 }
 
-export function creatorFeePost(
-  tokenId: string,
-  shareId: string,
-  ticker?: string,
-) {
-  return `${tokenShareTitle(ticker)}.\nOne ticker. No copies. Launch, trade, and share creator fees.\n${tokenShareUrl(tokenId, shareId)}`;
+export function creatorFeeShareUrl(shareId: string) {
+  const origin = isStaging()
+    ? "https://staging.oneonly.lol"
+    : "https://oneonly.lol";
+  const url = new URL("/app", origin);
+  url.searchParams.set("share", shareId);
+  return url.toString();
+}
+
+export function creatorFeePost(shareId: string) {
+  return `Claimed creator fees on @oneonlylol.\n${creatorFeeShareUrl(shareId)}`;
 }

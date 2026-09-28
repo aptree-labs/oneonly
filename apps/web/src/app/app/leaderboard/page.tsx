@@ -1,10 +1,10 @@
 import { Leaderboard } from "@/components/launchpad/leaderboard";
+import { isStaging } from "@/lib/deployment";
 import { initialLeaderboard } from "@/lib/launchpad/leaderboard";
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Leaderboard",
-  description:
-    "Top traders across OneOnly tokens, ranked by indexed trading volume.",
+  description: "Top creators and traders on OneOnly.",
   alternates: { canonical: "https://oneonly.lol/app/leaderboard" },
 };
 export default async function Page({
@@ -13,11 +13,14 @@ export default async function Page({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const initial = await initialLeaderboard().catch(() => undefined);
+  const creatorsFirst = isStaging() && tab !== "traders";
+  const initial = creatorsFirst
+    ? undefined
+    : await initialLeaderboard().catch(() => undefined);
   return (
     <Leaderboard
       initial={initial}
-      initialTab={tab === "creators" ? "recipients" : "traders"}
+      initialTab={creatorsFirst ? "recipients" : "traders"}
     />
   );
 }

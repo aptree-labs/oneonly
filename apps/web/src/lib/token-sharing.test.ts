@@ -1,15 +1,16 @@
 import { afterEach, expect, it, vi } from "vitest";
 import {
   creatorFeePost,
+  creatorFeeShareUrl,
   tokenShareTitle,
   tokenShareUrl,
   tokenShareDescription,
 } from "./token-sharing";
 afterEach(() => vi.unstubAllEnvs());
-it("promotes the token with a trading link and a discreet per-claim proof", () => {
+it("shares a concise creator-fee post linking Explore with a per-claim proof", () => {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
-  expect(creatorFeePost("token-1", "claim-1", "ANDY")).toBe(
-    "Trade $ANDY on OneOnly.\nOne ticker. No copies. Launch, trade, and share creator fees.\nhttps://oneonly.lol/app/token/token-1?share=claim-1",
+  expect(creatorFeePost("claim-1")).toBe(
+    "Claimed creator fees on @oneonlylol.\nhttps://oneonly.lol/app?share=claim-1",
   );
   expect(tokenShareTitle("ANDY")).toBe("Trade $ANDY on OneOnly");
   expect(tokenShareDescription).toContain("One ticker. No copies.");
@@ -17,6 +18,9 @@ it("promotes the token with a trading link and a discreet per-claim proof", () =
 });
 it("keeps staging token links on staging, where those tokens are listed", () => {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
+  expect(creatorFeeShareUrl("claim-2")).toBe(
+    "https://staging.oneonly.lol/app?share=claim-2",
+  );
   expect(tokenShareUrl("token-1", "claim-2")).toBe(
     "https://staging.oneonly.lol/app/token/token-1?share=claim-2",
   );
