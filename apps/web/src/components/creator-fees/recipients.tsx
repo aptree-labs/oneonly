@@ -157,7 +157,7 @@ export function RecipientList({
           <div className="cf-creator-result" key={row.xId}>
             <Link
               className="cf-recipient-row"
-              href={`/app/creator-fees?recipient=${encodeURIComponent(row.xId)}`}
+              href={`/app/creators/${encodeURIComponent(row.xId)}`}
               onClick={onChoose}
             >
               <FeeIdentity profile={row} />

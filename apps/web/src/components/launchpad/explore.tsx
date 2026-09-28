@@ -134,7 +134,7 @@ export function TokenCard({
               <Link
                 key={profile.xId}
                 prefetch={false}
-                href={`/app/creator-fees?recipient=${profile.xId}`}
+                href={`/app/creators/${profile.xId}`}
                 title={`${profile.name} · ${profile.shareBps / 100}% of creator fees`}
               >
                 {profile.avatar?.startsWith("https://") && (

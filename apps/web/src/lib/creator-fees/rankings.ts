@@ -63,13 +63,15 @@ export async function creatorRankings(
             decimals: number;
             amountAtomic: string;
             pendingAtomic: string;
+            earnedAtomic: string;
           }[]
         | null
       >`(
         select jsonb_agg(asset) from (
           select e->>'mint' as mint, e->>'symbol' as symbol, (e->>'decimals')::int as decimals,
             sum((e->>'amountAtomic')::numeric)::text as "amountAtomic",
-            sum(coalesce((e->>'pendingAtomic')::numeric,0))::text as "pendingAtomic"
+            sum(coalesce((e->>'pendingAtomic')::numeric,0))::text as "pendingAtomic",
+            sum(coalesce((e->>'totalEntitlementAtomic')::numeric, (e->>'amountAtomic')::numeric + coalesce((e->>'claimedAtomic')::numeric,0)) + coalesce((e->>'pendingAtomic')::numeric,0))::text as "earnedAtomic"
           from creator_fee_balance_snapshots s
           join creator_fee_pools p on p.token_id=s.token_id
           join launch_tokens t on t.id=p.token_id

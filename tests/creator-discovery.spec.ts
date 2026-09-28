@@ -35,7 +35,30 @@ test.beforeEach(async ({ page }) => {
       return route.fulfill({ json: { profiles: [profile] } });
     if (path.endsWith("/recipients/123"))
       return route.fulfill({
-        json: { profile, allocations: [], hasMore: false },
+        json: {
+          profile,
+          allocations: [
+            {
+              tokenId: "token-test",
+              ticker: "TEST",
+              name: "Test",
+              shareBps: 3000,
+              balanceStatus: "available",
+              balances: [
+                {
+                  mint: "sol",
+                  symbol: "SOL",
+                  decimals: 9,
+                  amountAtomic: "2000000",
+                  totalEntitlementAtomic: "10000000",
+                  claimedAtomic: "8000000",
+                  pendingAtomic: "0",
+                },
+              ],
+            },
+          ],
+          hasMore: false,
+        },
       });
     if (path.endsWith("/leaderboard"))
       return route.fulfill({
@@ -92,24 +115,28 @@ test("finds a new X creator and carries the chosen pair into an editable launch 
   await page.getByRole("spinbutton").first().fill("25");
   await expect(page.getByText("75%", { exact: true })).toBeVisible();
 });
-test("creator rankings show coins, native claimable fees and both sort modes", async ({
+test("creator rankings show total earnings and both sort modes", async ({
   page,
 }, info) => {
   test.setTimeout(90000);
   await page.goto("/app/leaderboard");
   await page.getByRole("button", { name: "Creators", exact: true }).click();
   const board = page.getByRole("region", { name: "Creator leaderboard" });
-  await expect(board.getByText("0.002 SOL to claim")).toBeVisible();
-  await expect(board.getByText("50 linked tokens")).toBeVisible();
+  await expect(board.getByText("$100 earned")).toBeVisible();
+  await expect(board.getByText(/to claim|unclaimed|Fees updating/)).toHaveCount(
+    0,
+  );
+  await expect(board.getByText("50 tokens")).toBeVisible();
   const request = page.waitForRequest((r) =>
     r.url().includes("leaderboard?sort=tokens"),
   );
   await board.getByRole("button", { name: "Most tokens" }).click();
   await request;
   await expect(board.getByText("50 tokens", { exact: true })).toBeVisible();
-  await expect(
-    board.getByRole("link", { name: "Launch with @elonmusk" }),
-  ).toHaveAttribute("href", "/app/create?creator=123&quote=SOL");
+  await expect(board.getByRole("link", { name: /Elon Musk/ })).toHaveAttribute(
+    "href",
+    "/app/creators/123",
+  );
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
@@ -149,9 +176,41 @@ test("Explore cards show linked X recipients and their fee split", async ({
   await expect(card.getByText("Fees to")).toBeVisible();
   await expect(
     card.getByRole("link", { name: "@elonmusk 70%" }),
-  ).toHaveAttribute("href", "/app/creator-fees?recipient=123");
+  ).toHaveAttribute("href", "/app/creators/123");
   await page.screenshot({
     path: info.outputPath("card-recipients.png"),
     fullPage: true,
   });
+});
+
+test("public creator profiles show earnings and stay separate from personal claims", async ({
+  page,
+}, info) => {
+  test.setTimeout(90000);
+  await page.goto("/app/creator-fees?recipient=123");
+  await expect(page).toHaveURL(/\/app\/creators\/123$/);
+  await expect(page.getByRole("heading", { name: "@elonmusk" })).toBeVisible();
+  await expect(page.getByText("0.01 SOL", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(/Ready to claim|Unclaimed fees|Your share/),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Claim fees", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("link", { name: "Launch with @elonmusk" }),
+  ).toHaveAttribute("href", "/app/create?creator=123&quote=SOL");
+  await page.screenshot({
+    path: info.outputPath("creator-profile.png"),
+    fullPage: true,
+  });
+  await page.getByRole("link", { name: "Creators", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Creators", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.goto("/app/creator-fees");
+  await expect(
+    page.getByRole("heading", { name: "Creator fees", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("@elonmusk", { exact: true })).toHaveCount(0);
 });

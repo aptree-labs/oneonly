@@ -18,9 +18,15 @@ const periods = [
   { value: "7d", label: "7 days" },
   { value: "all", label: "All time" },
 ] as const;
-export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
+export function Leaderboard({
+  initial,
+  initialTab = "traders",
+}: {
+  initial?: TraderLeaderboard;
+  initialTab?: "traders" | "recipients";
+}) {
   const { wallet, network, staging } = useLaunchpad();
-  const [tab, setTab] = useState<"traders" | "recipients">("traders");
+  const [tab, setTab] = useState<"traders" | "recipients">(initialTab);
   const [period, setPeriod] = useState<LeaderboardPeriod>("24h");
   const [data, setData] = useState(initial);
   const [loading, setLoading] = useState(!initial);

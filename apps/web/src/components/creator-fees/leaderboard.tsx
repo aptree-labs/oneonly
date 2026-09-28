@@ -4,16 +4,10 @@ import Link from "next/link";
 import { RefreshCw } from "lucide-react";
 import { feeApi } from "./client";
 import { FeeIdentity } from "./profile";
-import { createCreatorHref } from "@/lib/create-prefill";
+import { earnedLabel } from "./earnings";
 import type { creatorRankings, CreatorSort } from "@/lib/creator-fees/rankings";
 import "./creator-fees.css";
 type Rankings = Awaited<ReturnType<typeof creatorRankings>>;
-const usd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  notation: "compact",
-  maximumFractionDigits: 2,
-});
 export function CreatorLeaderboard() {
   const [sort, setSort] = useState<CreatorSort>("fees");
   const [offset, setOffset] = useState(0);
@@ -108,65 +102,28 @@ export function CreatorLeaderboard() {
           <div className="cf-creator-result" key={row.xId}>
             <Link
               className="cf-recipient-row"
-              href={`/app/creator-fees?recipient=${row.xId}`}
+              href={`/app/creators/${row.xId}`}
             >
               <span className="cf-creator-rank">#{row.rank}</span>
               <FeeIdentity profile={row} />
               <span className="cf-recipient-stat">
-                <strong>
+                <strong
+                  title={
+                    row.feesUsd !== null
+                      ? "Estimated at current prices"
+                      : undefined
+                  }
+                >
                   {sort === "fees"
-                    ? row.feesUsd === null
-                      ? "—"
-                      : usd.format(row.feesUsd)
+                    ? `${earnedLabel(row.balances, row.feesUsd)} earned`
                     : `${row.tokenCount} ${row.tokenCount === 1 ? "token" : "tokens"}`}
                 </strong>
                 <small>
                   {sort === "fees"
-                    ? `${row.tokenCount} linked ${row.tokenCount === 1 ? "token" : "tokens"}`
-                    : `${row.feesUsd === null ? "—" : usd.format(row.feesUsd)} earned`}
+                    ? `${row.tokenCount} ${row.tokenCount === 1 ? "token" : "tokens"}`
+                    : `${earnedLabel(row.balances, row.feesUsd)} earned`}
                 </small>
-                {row.balances
-                  ?.filter(
-                    (balance) =>
-                      BigInt(balance.amountAtomic) +
-                        BigInt(balance.pendingAtomic) >
-                      0n,
-                  )
-                  .map((balance) => (
-                    <small
-                      key={balance.mint}
-                      title="Estimated unclaimed fees, including fees awaiting collection"
-                    >
-                      {(
-                        Number(
-                          BigInt(balance.amountAtomic) +
-                            BigInt(balance.pendingAtomic),
-                        ) /
-                        10 ** balance.decimals
-                      ).toLocaleString("en-US", {
-                        maximumFractionDigits: Math.min(balance.decimals, 9),
-                      })}{" "}
-                      {balance.symbol} to claim
-                    </small>
-                  ))}
-                {row.balances &&
-                  row.observedTokens === row.tokenCount &&
-                  row.balances.every(
-                    (balance) =>
-                      BigInt(balance.amountAtomic) +
-                        BigInt(balance.pendingAtomic) ===
-                      0n,
-                  ) && <small>No unclaimed fees</small>}
-                {(row.feesUsd === null || row.freshTokens < row.tokenCount) && (
-                  <small>Fees updating</small>
-                )}
               </span>
-            </Link>
-            <Link
-              href={createCreatorHref(row.xId)!}
-              className="cf-text-button cf-creator-launch"
-            >
-              Launch with @{row.username}
             </Link>
           </div>
         ))}
@@ -196,11 +153,6 @@ export function CreatorLeaderboard() {
           </nav>
         )}
       </div>
-      <p className="lp-caption cf-ranking-note">
-        Fees earned include claimed and unclaimed fees, estimated in USD at
-        current prices. Most tokens counts confirmed launches sharing fees with
-        each creator.
-      </p>
     </section>
   );
 }

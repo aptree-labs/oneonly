@@ -42,44 +42,21 @@ type Challenge = {
   expiresAt: string | number;
   status: string;
 };
-export function CreatorFees({ recipient }: { recipient?: string }) {
+export function CreatorFees() {
   const app = useLaunchpad();
   const { status, staging, error: statusError } = useFeeStatus();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [revision, setRevision] = useState(0);
   const [needsXReconnect, setNeedsXReconnect] = useState(false);
   const lastTransaction = useRef(app.transactionRevision);
   useEffect(() => {
     if (lastTransaction.current === app.transactionRevision) return;
     lastTransaction.current = app.transactionRevision;
-    if (recipient) setRevision((value) => value + 1);
-    else if (account) void loadMine();
+    if (account) void loadMine();
   }, [app.transactionRevision]);
-  useEffect(() => {
-    setAccount(null);
-    setError("");
-    if (!status?.enabled || !recipient) return;
-    const controller = new AbortController();
-    setLoading(true);
-    feeApi<Account>(
-      `recipients/${encodeURIComponent(recipient)}`,
-      undefined,
-      controller.signal,
-    )
-      .then(setAccount)
-      .catch((error) => {
-        if (!controller.signal.aborted) setError(error.message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [recipient, status?.enabled, revision]);
   // A wallet change invalidates every private balance and claim shown here.
   useEffect(() => {
-    if (recipient) return;
     setAccount(null);
     setNeedsXReconnect(false);
     if (!app.wallet || !status?.enabled) return;
@@ -94,7 +71,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
         /* Connect & view fees can establish a new session. */
       });
     return () => controller.abort();
-  }, [app.wallet, recipient, status?.enabled]);
+  }, [app.wallet, status?.enabled]);
   async function loadMine() {
     setLoading(true);
     setError("");
@@ -112,9 +89,9 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
     setLoading(true);
     setError("");
     try {
-      if (!recipient) await app.authenticate();
+      await app.authenticate();
       const next = await feeApi<Account>(
-        `${recipient ? `recipients/${encodeURIComponent(recipient)}` : "me"}?offset=${account.allocations.length}`,
+        `me?offset=${account.allocations.length}`,
       );
       setAccount((previous) =>
         previous
@@ -174,16 +151,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
   return (
     <div className="cf-dashboard">
       <header className="lp-page-heading">
-        <span className="lp-kicker">
-          CREATOR FEES ·{" "}
-          {app.network === "devnet" ? "DEVNET" : "MAINNET STAGING"}
-        </span>
-        <h1>
-          Your share.
-          <br />
-          <em>Your call.</em>
-        </h1>
-        <p>Fees allocated to an X account, ready for its owner to claim.</p>
+        <h1>Creator fees</h1>
       </header>
       {!staging ? (
         <p className="lp-notice">
@@ -207,26 +175,20 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
             {account?.profile ? (
               <FeeIdentity profile={account.profile} />
             ) : (
-              <h2>{recipient ? "Fee recipient" : "My creator fees"}</h2>
+              <h2>My creator fees</h2>
             )}
-            {recipient ? (
-              <Link className="lp-secondary" href="/app/creator-fees">
-                My fees
-              </Link>
-            ) : (
-              <button
-                className="lp-secondary"
-                disabled={loading}
-                onClick={() => void loadMine()}
-              >
-                {loading ? (
-                  <LoaderCircle size={16} className="lp-spin" />
-                ) : (
-                  <RefreshCw size={16} />
-                )}
-                {account ? "Refresh" : "Connect & view fees"}
-              </button>
-            )}
+            <button
+              className="lp-secondary"
+              disabled={loading}
+              onClick={() => void loadMine()}
+            >
+              {loading ? (
+                <LoaderCircle size={16} className="lp-spin" />
+              ) : (
+                <RefreshCw size={16} />
+              )}
+              {account ? "Refresh" : "Connect & view fees"}
+            </button>
           </div>
           {error && (
             <p className="lp-error" role="alert">
@@ -244,18 +206,15 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               X post verification is not available yet. Fee claims are paused.
             </p>
           )}
-          {!recipient && !status.bindingAvailable && (
+          {!status.bindingAvailable && (
             <p className="lp-notice">X account linking is not available yet.</p>
           )}
-          {!recipient &&
-            status.bindingAvailable &&
-            account &&
-            !account.profile && (
-              <p className="lp-notice">
-                Connect X in the top bar, then refresh to find your allocations.
-              </p>
-            )}
-          {!recipient && account?.profile && !account.binding && (
+          {status.bindingAvailable && account && !account.profile && (
+            <p className="lp-notice">
+              Connect X in the top bar, then refresh to find your allocations.
+            </p>
+          )}
+          {account?.profile && !account.binding && (
             <div className="lp-panel cf-bind">
               <div>
                 <h2>Link your claim wallet</h2>
@@ -286,15 +245,9 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
           {account && !loading && account.allocations.length === 0 && (
             <div className="lp-panel cf-empty">
               <h2>No allocations yet</h2>
-              <p>
-                Tokens that share creator fees with{" "}
-                {account.profile
-                  ? `@${account.profile.username}`
-                  : "your X account"}{" "}
-                will appear here.
-              </p>
-              <Link className="lp-secondary" href="/app/leaderboard">
-                Explore recipients <ArrowUpRight size={16} />
+
+              <Link className="lp-secondary" href="/app">
+                Explore tokens <ArrowUpRight size={16} />
               </Link>
             </div>
           )}
@@ -310,49 +263,43 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
                 </strong>
               </div>
               {allocation.balanceStatus !== "available" ? (
-                <p className="cf-muted">Unclaimed fees unavailable</p>
-              ) : allocation.balances.length === 0 ? (
+                <p className="cf-muted">Fees unavailable</p>
+              ) : allocation.balances.every(
+                  (balance) =>
+                    BigInt(balance.amountAtomic) === 0n &&
+                    BigInt(balance.pendingAtomic || "0") === 0n,
+                ) ? (
                 <p className="cf-muted">No fees available to claim.</p>
               ) : (
-                allocation.balances.map((balance) => (
-                  <div key={balance.mint} className="cf-balance">
-                    <small className="lp-caption">Ready to claim</small>
-                    <span>
-                      {(
-                        Number(balance.amountAtomic) /
-                        10 ** balance.decimals
-                      ).toLocaleString("en-US", {
-                        maximumFractionDigits: Math.min(balance.decimals, 9),
-                      })}{" "}
-                      {balance.symbol}
-                    </span>
-                    {recipient &&
-                      balance.pendingAtomic &&
-                      BigInt(balance.pendingAtomic) > 0n && (
-                        <p className="lp-caption">
-                          {(
-                            Number(balance.pendingAtomic) /
-                            10 ** balance.decimals
-                          ).toLocaleString("en-US", {
-                            maximumFractionDigits: Math.min(
-                              balance.decimals,
-                              9,
-                            ),
-                          })}{" "}
-                          {balance.symbol} awaiting collection · estimated
-                        </p>
+                allocation.balances
+                  .filter(
+                    (balance) =>
+                      BigInt(balance.amountAtomic) > 0n ||
+                      BigInt(balance.pendingAtomic || "0") > 0n,
+                  )
+                  .map((balance) => (
+                    <div key={balance.mint} className="cf-balance">
+                      <small className="lp-caption">Claimable</small>
+                      <span>
+                        {(
+                          Number(balance.amountAtomic) /
+                          10 ** balance.decimals
+                        ).toLocaleString("en-US", {
+                          maximumFractionDigits: Math.min(balance.decimals, 9),
+                        })}{" "}
+                        {balance.symbol}
+                      </span>
+                      {!!account.binding && (
+                        <ClaimFlow
+                          key={`${app.wallet}:${app.transactionRevision}:${allocation.tokenId}:${balance.mint}`}
+                          allocation={allocation}
+                          balance={balance}
+                          enabled={status.escrowAvailable}
+                          verificationAvailable={status.lookupAvailable}
+                        />
                       )}
-                    {!recipient && !!account.binding && (
-                      <ClaimFlow
-                        key={`${app.wallet}:${app.transactionRevision}:${allocation.tokenId}:${balance.mint}`}
-                        allocation={allocation}
-                        balance={balance}
-                        enabled={status.escrowAvailable}
-                        verificationAvailable={status.lookupAvailable}
-                      />
-                    )}
-                  </div>
-                ))
+                    </div>
+                  ))
               )}
             </article>
           ))}
@@ -363,14 +310,6 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
               onClick={() => void loadMore()}
             >
               {loading ? "Loading…" : "Load more tokens"}
-            </button>
-          )}
-          {recipient && error && (
-            <button
-              className="lp-secondary"
-              onClick={() => setRevision((value) => value + 1)}
-            >
-              Retry
             </button>
           )}
         </>

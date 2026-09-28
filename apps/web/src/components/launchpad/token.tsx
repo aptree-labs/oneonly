@@ -209,7 +209,7 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
                   <Link
                     key={profile.xId}
                     prefetch={false}
-                    href={`/app/creator-fees?recipient=${profile.xId}`}
+                    href={`/app/creators/${profile.xId}`}
                     className="lp-token-creator"
                   >
                     <FeeIdentity profile={profile} />

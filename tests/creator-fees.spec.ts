@@ -117,11 +117,13 @@ test("missing escrow readiness cannot enable sharing and public recipients show 
     page.getByRole("button", { name: "Review launch" }),
   ).toBeDisabled();
   await expect(page.getByText(/Fee sharing is being prepared/)).toBeVisible();
-  await page.goto("/app/creator-fees?recipient=100");
-  await expect(page.getByText("@demo_creator", { exact: true })).toBeVisible();
+  await page.goto("/app/creators/100");
+  await expect(
+    page.getByText("@demo_creator", { exact: true }).first(),
+  ).toBeVisible();
   await expect(page.getByText("25% creator share")).toBeVisible();
   await expect(
-    page.getByText("Unclaimed fees unavailable", { exact: true }),
+    page.locator(".cf-public-token").getByText("—", { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Claim fees", exact: true }),
@@ -289,7 +291,7 @@ test("a linked recipient must verify a new post before a claim can proceed", asy
   expect(claims).toBe(0);
 });
 
-test("recipient rankings keep different assets separate and mark partial coverage", async ({
+test("recipient rankings show total earnings and keep different assets separate", async ({
   page,
 }) => {
   await fixtures(page, true);
@@ -324,12 +326,14 @@ test("recipient rankings keep different assets separate and mark partial coverag
                 decimals: 9,
                 amountAtomic: "1000000000",
                 pendingAtomic: "500000000",
+                earnedAtomic: "2000000000",
               },
               {
                 mint: "usdc",
                 symbol: "USDC",
                 decimals: 6,
                 amountAtomic: "2000000",
+                earnedAtomic: "3000000",
                 pendingAtomic: "0",
               },
             ],
@@ -342,14 +346,10 @@ test("recipient rankings keep different assets separate and mark partial coverag
   await page.goto("/app/leaderboard");
   await page.getByRole("button", { name: "Creators", exact: true }).click();
   const recipient = page.locator(".cf-recipient-row");
-  await expect(recipient).toContainText("3 linked tokens");
-  await expect(recipient).toContainText("1.5 SOL to claim");
-  await expect(recipient).toContainText("2 USDC to claim");
-  await expect(recipient).toContainText("Fees updating");
-  await expect(recipient).toHaveAttribute(
-    "href",
-    "/app/creator-fees?recipient=100",
-  );
+  await expect(recipient).toContainText("3 tokens");
+  await expect(recipient).toContainText("2 SOL · 3 USDC earned");
+  await expect(recipient).not.toContainText("to claim");
+  await expect(recipient).toHaveAttribute("href", "/app/creators/100");
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

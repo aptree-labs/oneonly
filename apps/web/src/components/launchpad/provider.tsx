@@ -537,13 +537,15 @@ function Shell({
                     ? "YOUR CORNER"
                     : pathname.includes("leaderboard")
                       ? "THE LEADERBOARD"
-                      : pathname.includes("creator-fees")
-                        ? "CREATOR FEES"
-                        : pathname.includes("office")
-                          ? "RETARD OFFICE"
-                          : pathname.includes("token/")
-                            ? "THE MARKET"
-                            : "THE WASTELAND"}
+                      : pathname.includes("/creators/")
+                        ? "CREATOR"
+                        : pathname.includes("creator-fees")
+                          ? "CREATOR FEES"
+                          : pathname.includes("office")
+                            ? "RETARD OFFICE"
+                            : pathname.includes("token/")
+                              ? "THE MARKET"
+                              : "THE WASTELAND"}
             </span>
             <div className="lp-topbar-actions">
               <button

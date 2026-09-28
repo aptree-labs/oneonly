@@ -122,6 +122,7 @@ it("ranks earned fees across assets before pagination, preserving claimed earnin
       symbol: "SOL",
       decimals: 9,
       amountAtomic: "2000000",
+      earnedAtomic: "1000000000",
       pendingAtomic: "0",
     },
   ]);

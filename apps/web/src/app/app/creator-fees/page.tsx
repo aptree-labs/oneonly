@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { CreatorFees } from "@/components/creator-fees/dashboard";
 export const metadata = {
   title: "Creator fees",
@@ -9,9 +10,7 @@ export default async function Page({
   searchParams: Promise<{ recipient?: string }>;
 }) {
   const { recipient } = await searchParams;
-  return (
-    <CreatorFees
-      recipient={recipient && /^\d+$/.test(recipient) ? recipient : undefined}
-    />
-  );
+  if (recipient && /^[1-9]\d{0,24}$/.test(recipient))
+    redirect(`/app/creators/${recipient}`);
+  return <CreatorFees />;
 }
