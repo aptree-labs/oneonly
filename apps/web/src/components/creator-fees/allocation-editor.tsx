@@ -20,7 +20,7 @@ export function AllocationEditor({
   onChange: (recipients: FeeRecipient[]) => void;
   onValidity: (valid: boolean) => void;
 }) {
-  const { status, staging, error: statusError } = useFeeStatus();
+  const { status, available, error: statusError } = useFeeStatus();
   const app = useLaunchpad();
   const [open, setOpen] = useState(value.length > 0);
   useEffect(() => {
@@ -101,7 +101,7 @@ export function AllocationEditor({
       setLoading(false);
     }
   }
-  if (!staging) return null;
+  if (!available) return null;
   return (
     <section className="cf-editor">
       <button

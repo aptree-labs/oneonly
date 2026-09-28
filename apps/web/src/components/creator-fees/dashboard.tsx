@@ -44,7 +44,7 @@ type Challenge = {
 };
 export function CreatorFees() {
   const app = useLaunchpad();
-  const { status, staging, error: statusError } = useFeeStatus();
+  const { status, available, error: statusError } = useFeeStatus();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -153,10 +153,8 @@ export function CreatorFees() {
       <header className="lp-page-heading">
         <h1>Creator fees</h1>
       </header>
-      {!staging ? (
-        <p className="lp-notice">
-          Creator fee sharing is available on staging only.
-        </p>
+      {!available ? (
+        <p className="lp-notice">Creator fee sharing is unavailable.</p>
       ) : statusError ? (
         <p className="lp-error" role="alert">
           {statusError}

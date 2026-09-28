@@ -5,7 +5,7 @@
 | Staging     | `staging`  | `oneonly-app` Preview, branch-scoped variables | https://staging.oneonly.lol | Mainnet, explicitly enabled for real-funds acceptance testing |
 | Production  | `main`     | `oneonly-app` Production                       | https://oneonly.lol         | Mainnet                                                       |
 
-Staging now tests the deployed mainnet escrow before creator-fee sharing is released in production. The old `oneonly-staging` project is not the release target. Production creator-fee sharing remains disabled by server-side environment checks.
+Staging tests the deployed mainnet escrow before approved changes are promoted to production. The old `oneonly-staging` project is not the release target. Production creator-fee sharing requires `ONEONLY_ENVIRONMENT=production`, `SOLANA_NETWORK=mainnet-beta`, and `CREATOR_FEES_ENABLED=true`.
 
 ## Isolation
 
@@ -38,3 +38,9 @@ The mainnet verifier is separate from devnet. Its claim domain is `oneonly:fee:v
 The compiled mainnet artifact has been tested locally for a successful mainnet-domain claim and rejection of a devnet-domain attestation. These tests do not substitute for the user's real X-post-to-mainnet-payout acceptance test. No test post is published automatically.
 
 Preview deployments do not run Vercel production cron jobs; acceptance testing should use the app's collection and confirmation flows rather than assume a minute-by-minute background scan.
+
+## Production creator-fee configuration
+
+Production uses its existing database, cache namespace, X link secret, and OAuth broker. Configure the verified mainnet program and matching verifier key pair, `TWITTERAPI_IO_API_KEY`, and `X_CLIENT_ID` in the Production target. The original OneOnly project continues to hold the OAuth client secret and handle login through the existing rewrite. Apply the creator-fee database migration before enabling the release.
+
+Never copy the staging database, staging environment flags, or `CREATOR_FEE_TEST_GRANT` into Production. Internal test proofs are rejected outside staging. Production claims require fresh X-post verification and wallet approval.

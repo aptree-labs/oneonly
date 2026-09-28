@@ -1,3 +1,4 @@
+import { creatorFeeEnvironmentEnabled } from "../deployment";
 import { verifyInternalTestProof } from "./test-proof";
 import {
   creatorFeePost,
@@ -30,15 +31,11 @@ import { readCreatorFeeBalances } from "./balances";
 import { cachedFeeBalances, recipientFeeTotals } from "./projections";
 import { publicCache } from "../cache/public-cache";
 export { FeeError } from "./provider";
-export const feeFeatureEnabled = () =>
-  process.env.ONEONLY_ENVIRONMENT === "staging" &&
-  (NETWORK === "devnet" ||
-    (NETWORK === "mainnet-beta" &&
-      process.env.STAGING_MAINNET_ENABLED === "true"));
+export const feeFeatureEnabled = () => creatorFeeEnvironmentEnabled(NETWORK);
 export function assertFeeFeature() {
   if (!feeFeatureEnabled())
     throw new FeeError(
-      "Creator fee sharing is available only in the enabled staging environment.",
+      "Creator fee sharing is not enabled in this environment.",
       404,
     );
 }

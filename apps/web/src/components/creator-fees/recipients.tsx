@@ -30,7 +30,7 @@ export function RecipientList({
   onChoose?: () => void;
   pair?: string;
 }) {
-  const { status, staging, error: statusError } = useFeeStatus();
+  const { status, available, error: statusError } = useFeeStatus();
   const [rows, setRows] = useState<Recipient[]>([]);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -103,7 +103,7 @@ export function RecipientList({
       controller.abort();
     };
   }, [status?.enabled, query, offset, compact, retry]);
-  if (!staging || (compact && !query.trim())) return null;
+  if (!available || (compact && !query.trim())) return null;
   if (!status?.enabled)
     return compact ? null : (
       <p className="lp-notice" role="status">

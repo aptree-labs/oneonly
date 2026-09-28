@@ -50,11 +50,11 @@ export async function feeApi<T>(
   return result as T;
 }
 export function useFeeStatus() {
-  const { network, staging = false } = useLaunchpad();
+  const { network, creatorFeesEnabled: available = false } = useLaunchpad();
   const [status, setStatus] = useState<FeeStatus | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (!staging) return;
+    if (!available) return;
     const controller = new AbortController();
     feeApi<FeeStatus>("status", undefined, controller.signal)
       .then(setStatus)
@@ -62,11 +62,11 @@ export function useFeeStatus() {
         if (!controller.signal.aborted) setError(error.message);
       });
     return () => controller.abort();
-  }, [network, staging]);
+  }, [network, available]);
   return {
-    status: staging ? status : null,
+    status: available ? status : null,
     error,
-    staging,
+    available,
     network,
   };
 }

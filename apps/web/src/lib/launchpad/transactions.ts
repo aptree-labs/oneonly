@@ -1,3 +1,4 @@
+import { creatorFeeEnvironmentEnabled } from "../deployment";
 import { validateLaunchSimulation } from "./launch-simulation";
 import { SendTransactionError } from "@solana/web3.js";
 import {
@@ -401,7 +402,7 @@ export async function trade(wallet: string, input: Record<string, unknown>) {
 export async function claim(wallet: string, id: string, venue = "dbc") {
   await assertNetwork();
   const token = await tokenById(id);
-  if (process.env.ONEONLY_ENVIRONMENT === "staging") {
+  if (creatorFeeEnvironmentEnabled(NETWORK)) {
     const [shared] = await (
       await getDatabase()
     )

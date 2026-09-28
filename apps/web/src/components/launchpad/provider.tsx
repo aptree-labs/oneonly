@@ -124,6 +124,7 @@ type AppContext = {
   theme: Theme;
   network: SolanaNetwork;
   staging?: boolean;
+  creatorFeesEnabled?: boolean;
   explorer: (kind: "tx" | "address", value: string) => string;
   authenticate: () => Promise<string>;
   review: (intent: Intent) => void;
@@ -145,10 +146,12 @@ function Shell({
   network,
   initialTheme,
   staging = false,
+  creatorFeesEnabled = staging,
 }: {
   children: ReactNode;
   network: SolanaNetwork;
   staging?: boolean;
+  creatorFeesEnabled?: boolean;
   initialTheme: Theme;
 }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
@@ -419,7 +422,7 @@ function Shell({
     { href: "/app/create", label: "Launch a token", Icon: Rocket },
     { href: "/app/portfolio", label: "Your wallet", Icon: Wallet },
     { href: "/app/leaderboard", label: "Leaderboard", Icon: Trophy },
-    ...(staging
+    ...(creatorFeesEnabled
       ? [{ href: "/app/creator-fees", label: "Creator fees", Icon: Coins }]
       : []),
     { href: "/app/office", label: "Retard Office", Icon: Building2 },
@@ -430,6 +433,7 @@ function Shell({
       value={{
         theme,
         staging,
+        creatorFeesEnabled,
         authenticate,
         transactionRevision,
         lastConfirmedTrade,
@@ -913,10 +917,12 @@ export function LaunchpadProvider({
   network,
   initialTheme,
   staging = false,
+  creatorFeesEnabled = staging,
 }: {
   children: ReactNode;
   network: SolanaNetwork;
   staging?: boolean;
+  creatorFeesEnabled?: boolean;
   initialTheme: Theme;
 }) {
   const wallets = useMemo(
@@ -938,6 +944,7 @@ export function LaunchpadProvider({
             network={network}
             initialTheme={initialTheme}
             staging={staging}
+            creatorFeesEnabled={creatorFeesEnabled}
           >
             {children}
           </Shell>

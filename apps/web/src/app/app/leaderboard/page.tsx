@@ -1,5 +1,6 @@
 import { Leaderboard } from "@/components/launchpad/leaderboard";
-import { isStaging } from "@/lib/deployment";
+import { NETWORK } from "@oneonly/protocol";
+import { creatorFeeEnvironmentEnabled } from "@/lib/deployment";
 import { initialLeaderboard } from "@/lib/launchpad/leaderboard";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -13,7 +14,8 @@ export default async function Page({
   searchParams: Promise<{ tab?: string }>;
 }) {
   const { tab } = await searchParams;
-  const creatorsFirst = isStaging() && tab !== "traders";
+  const creatorsFirst =
+    creatorFeeEnvironmentEnabled(NETWORK) && tab !== "traders";
   const initial = creatorsFirst
     ? undefined
     : await initialLeaderboard().catch(() => undefined);

@@ -1,3 +1,4 @@
+import { creatorFeeEnvironmentEnabled } from "../deployment";
 import { cache } from "react";
 import {
   getDatabase,
@@ -52,7 +53,7 @@ export async function tokenDetail(id: string, live = false) {
   ]);
   const current = fresh ?? saved[0] ?? null;
   const feePools =
-    process.env.ONEONLY_ENVIRONMENT === "staging" && token.network === NETWORK
+    creatorFeeEnvironmentEnabled(NETWORK) && token.network === NETWORK
       ? await db
           .select({
             tokenId: creatorFeePools.tokenId,

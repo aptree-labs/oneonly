@@ -220,7 +220,7 @@ it("atomically rejects concurrent verification and reused post evidence, without
 it("fails closed outside staging devnet", async () => {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
   vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
-  await expect(bindFeeWallet("wallet1", db)).rejects.toThrow("enabled staging");
+  await expect(bindFeeWallet("wallet1", db)).rejects.toThrow("not enabled");
 });
 
 import { creatorFeeRuntime } from "./runtime";
@@ -390,7 +390,7 @@ it("isolates immutable X wallet bindings between devnet and explicitly enabled m
   await bindFeeWallet("wallet-network-test", db);
   vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
   await expect(bindFeeWallet("wallet-network-test", db)).rejects.toThrow(
-    "enabled staging",
+    "not enabled",
   );
   vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
   await bindFeeWallet("wallet-network-test", db);

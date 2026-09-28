@@ -1,3 +1,4 @@
+import { creatorFeeEnvironmentEnabled } from "../deployment";
 import {
   assertFeeEscrowProgram,
   configAddress,
@@ -14,17 +15,12 @@ import {
 } from "@oneonly/protocol";
 import { fail } from "../launchpad/auth";
 
-/** Staging only; mainnet additionally requires an explicit real-funds opt-in. */
+/** Validate the enabled environment and live on-chain signing configuration. */
 export async function creatorFeeRuntime(
   options: { allowPaused?: boolean } = {},
 ) {
   if (
-    process.env.ONEONLY_ENVIRONMENT !== "staging" ||
-    (NETWORK !== "devnet" &&
-      !(
-        NETWORK === "mainnet-beta" &&
-        process.env.STAGING_MAINNET_ENABLED === "true"
-      )) ||
+    !creatorFeeEnvironmentEnabled(NETWORK) ||
     process.env.CREATOR_FEES_ENABLED !== "true"
   )
     return fail("Creator fee sharing is not enabled in this environment.", 503);

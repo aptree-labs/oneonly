@@ -198,7 +198,7 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
               )}
             </div>
           )}
-          {app.staging && !!token.feeRecipients?.length && (
+          {app.creatorFeesEnabled && !!token.feeRecipients?.length && (
             <div
               className="lp-token-creators"
               aria-label="Creator fee recipients"

@@ -124,7 +124,7 @@ export function TokenCard({
             <Copy size={13} aria-hidden="true" />
           )}
         </button>
-        {app.staging && !!token.feeRecipients?.length && (
+        {app.creatorFeesEnabled && !!token.feeRecipients?.length && (
           <div
             className="lp-card-recipients"
             aria-label="Creator fee recipients"

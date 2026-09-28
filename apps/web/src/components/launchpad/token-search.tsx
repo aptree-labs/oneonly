@@ -51,7 +51,7 @@ function ageLabel(date: string) {
 }
 
 export function TokenSearch() {
-  const { staging } = useLaunchpad();
+  const { creatorFeesEnabled } = useLaunchpad();
   const [open, setOpen] = useState(false);
   const [initialPair, setInitialPair] = useState("All");
   const dialog = useRef<HTMLDialogElement>(null);
@@ -112,7 +112,9 @@ export function TokenSearch() {
         onClick={() => show()}
       >
         <Search size={18} aria-hidden="true" />
-        <span>{staging ? "Search tokens or creators" : "Search tokens"}</span>
+        <span>
+          {creatorFeesEnabled ? "Search tokens or creators" : "Search tokens"}
+        </span>
         <kbd>⌘ / Ctrl K</kbd>
       </button>
       <dialog
@@ -146,7 +148,7 @@ function SearchContents({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { staging } = useLaunchpad();
+  const { creatorFeesEnabled } = useLaunchpad();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -216,12 +218,12 @@ function SearchContents({
         <input
           ref={input}
           aria-label={
-            staging
+            creatorFeesEnabled
               ? "Search tokens or creators"
               : "Search name, ticker, or contract address"
           }
           placeholder={
-            staging
+            creatorFeesEnabled
               ? "Search tokens or @creators"
               : "Search name, ticker, or contract address"
           }
@@ -353,7 +355,7 @@ function SearchContents({
         </div>
       </div>
       <div className="lp-token-search-scroll" ref={list}>
-        {staging && (
+        {creatorFeesEnabled && (
           <RecipientList
             query={search}
             pair={pair}

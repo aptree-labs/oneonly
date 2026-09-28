@@ -2,7 +2,7 @@ import { NETWORK } from "@oneonly/protocol";
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { LaunchpadProvider } from "@/components/launchpad/provider";
-import { isStaging } from "@/lib/deployment";
+import { isStaging, creatorFeeEnvironmentEnabled } from "@/lib/deployment";
 import "./launchpad.css";
 export const metadata: Metadata = {
   title: "Explore",
@@ -47,6 +47,7 @@ export default async function Layout({
       network={NETWORK}
       initialTheme={theme}
       staging={isStaging()}
+      creatorFeesEnabled={creatorFeeEnvironmentEnabled(NETWORK)}
     >
       {children}
     </LaunchpadProvider>

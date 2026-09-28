@@ -84,3 +84,26 @@ it("allows only explicitly opted-in mainnet staging with isolated storage", () =
   expect(xLinkStartOrigin(env)).toBe(staging.APP_URL);
   expect(xLinkReturnOrigin(env)).toBe(staging.APP_URL);
 });
+
+it("requires an explicit production mainnet creator-fee rollout", async () => {
+  const { creatorFeeEnvironmentEnabled } = await import("./deployment");
+  const enabled = {
+    ONEONLY_ENVIRONMENT: "production",
+    CREATOR_FEES_ENABLED: "true",
+  };
+  expect(creatorFeeEnvironmentEnabled("mainnet-beta", enabled)).toBe(true);
+  expect(creatorFeeEnvironmentEnabled("devnet", enabled)).toBe(false);
+  expect(
+    creatorFeeEnvironmentEnabled("mainnet-beta", {
+      ...enabled,
+      CREATOR_FEES_ENABLED: "false",
+    }),
+  ).toBe(false);
+  expect(
+    creatorFeeEnvironmentEnabled("mainnet-beta", {
+      ...enabled,
+      ONEONLY_ENVIRONMENT: "staging",
+    }),
+  ).toBe(false);
+  expect(creatorFeeEnvironmentEnabled("mainnet-beta", {})).toBe(false);
+});

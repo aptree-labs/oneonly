@@ -70,7 +70,7 @@ export function CreateToken({
     useState(!!initialCreator);
   const [creatorPrefillRetry, setCreatorPrefillRetry] = useState(0);
   useEffect(() => {
-    if (!initialCreator || !app.staging) {
+    if (!initialCreator || !app.creatorFeesEnabled) {
       setCreatorPrefillBusy(false);
       return;
     }
@@ -106,7 +106,7 @@ export function CreateToken({
         if (!controller.signal.aborted) setCreatorPrefillBusy(false);
       });
     return () => controller.abort();
-  }, [initialCreator, app.staging, creatorPrefillRetry]);
+  }, [initialCreator, app.creatorFeesEnabled, creatorPrefillRetry]);
   const imageSelection = useRef(0);
   useEffect(() => {
     setXSource("link");

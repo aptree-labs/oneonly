@@ -1,6 +1,6 @@
-# X creator-fee sharing — devnet preview
+# X creator-fee sharing
 
-This feature is restricted to the isolated staging app and Solana devnet. It is not a mainnet release or an independently audited contract. Ordinary launches and creator claims on mainnet keep their existing behavior.
+Creator-fee sharing is available in explicitly enabled mainnet production and isolated staging environments. The contract has internal runtime and integration coverage; this is not an independent security audit. Ordinary launches without sharing keep their existing creator-fee path. Historical validation notes below describe the earlier devnet rollout.
 
 ## What is implemented
 
@@ -17,7 +17,7 @@ Recipients may appear after the launch. They connect X through OAuth and authent
 1. **Prepare fees**, when needed: a permissionless transaction collects the relevant DBC or graduated DAMM v2 creator fees into escrow. The caller pays network fees and any new account rent. This does not pay the caller.
 2. Choose a token and claim asset with a collected balance. Fees still held by Meteora are labelled separately.
 3. Create a fresh ten-minute challenge. It freezes the recipient, wallet, token, asset, requested amount, cumulative cap, escrow, program, and binding version.
-4. Publish an original X post containing the exact one-time code. The server checks the post through twitterapi.io against the numeric author ID, original-post type and issuance time. A post can only verify one challenge.
+4. Publish an original X post containing the generated one-time share link. The server checks the post through twitterapi.io against the numeric author ID, original-post type and issuance time. A post can only verify one challenge.
 5. Review and approve the claim. The program validates the server's Ed25519 attestation, wallet signature, immutable allocation, cumulative entitlement, expiry, and unused nonce. Payment goes only to the bound wallet's token account.
 6. A confirmed on-chain receipt marks the claim paid. Preparing or signing an intent does not mark it paid. Wallet rejection and transaction expiration remain retryable while authorization is valid. A paid nonce cannot pay twice.
 
@@ -37,7 +37,7 @@ Recipient leaderboard totals are projections with freshness/coverage indicators.
 
 See [staging setup](./staging.md) and [HTTP API](./x-fee-api.md). Required server-only configuration:
 
-- `ONEONLY_ENVIRONMENT=staging` and `SOLANA_NETWORK=devnet`
+- Production: `ONEONLY_ENVIRONMENT=production` and `SOLANA_NETWORK=mainnet-beta`; staging configuration is documented separately
 - `TWITTERAPI_IO_API_KEY`
 - Existing X OAuth credentials and `X_LINK_SECRET`, with the staging callback registered
 - `CREATOR_FEE_PROGRAM_ID`, `CREATOR_FEE_VERIFIER_PUBLIC_KEY`, `CREATOR_FEE_VERIFIER_SECRET_KEY`
@@ -45,7 +45,7 @@ See [staging setup](./staging.md) and [HTTP API](./x-fee-api.md). Required serve
 
 Readiness checks verify the network genesis, fixed program address, executable account, on-chain verifier and matching local signing key. Missing credentials or verification errors fail closed. Never put keys into source, fixtures, browser props, or logs.
 
-Migration `0009_purple_nighthawk.sql` adds separate allocation, profile, binding, challenge and balance-snapshot tables. Apply only to the staging database with its direct URL and committed migration journal. It does not change existing token or trading records.
+Migration `0009_purple_nighthawk.sql` adds separate allocation, profile, binding, challenge and balance-snapshot tables. Apply to each target database with its direct URL and committed migration journal before enabling that environment. It does not change existing token or trading records.
 
 ## Validation commands
 

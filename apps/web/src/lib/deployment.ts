@@ -4,6 +4,23 @@ export function isStaging(env: DeploymentEnvironment = process.env) {
   return env.ONEONLY_ENVIRONMENT === "staging";
 }
 
+/** Explicit production rollout, with staging's independent mainnet opt-in. */
+export function creatorFeeEnvironmentEnabled(
+  network: string,
+  env: DeploymentEnvironment = process.env,
+) {
+  if (isStaging(env))
+    return (
+      network === "devnet" ||
+      (network === "mainnet-beta" && env.STAGING_MAINNET_ENABLED === "true")
+    );
+  return (
+    env.ONEONLY_ENVIRONMENT === "production" &&
+    network === "mainnet-beta" &&
+    env.CREATOR_FEES_ENABLED === "true"
+  );
+}
+
 /** Real-fund staging requires deliberate opt-in and separate storage. */
 export function assertStagingEnvironment(
   env: DeploymentEnvironment = process.env,

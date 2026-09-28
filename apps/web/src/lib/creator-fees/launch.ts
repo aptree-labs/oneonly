@@ -1,3 +1,4 @@
+import { creatorFeeEnvironmentEnabled } from "../deployment";
 import {
   allocationAddress,
   readAllocation,
@@ -60,12 +61,7 @@ export async function reconcileLaunchAllocation(
   actualCreator: string,
 ) {
   if (!encoded) return wallet;
-  if (
-    token.network !== NETWORK ||
-    process.env.ONEONLY_ENVIRONMENT !== "staging" ||
-    (NETWORK === "mainnet-beta" &&
-      process.env.STAGING_MAINNET_ENABLED !== "true")
-  )
+  if (token.network !== NETWORK || !creatorFeeEnvironmentEnabled(NETWORK))
     throw new Error("Unsupported shared fee launch environment");
   const saved = JSON.parse(encoded),
     recipients = validateFeeRecipients(saved.recipients),

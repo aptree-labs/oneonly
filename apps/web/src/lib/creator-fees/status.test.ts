@@ -62,7 +62,7 @@ it("never returns cached readiness after feature disablement or on mainnet", asy
   });
   expect(calls.runtime).toHaveBeenCalledTimes(1);
 });
-it("separates cached readiness across networks and keeps production disabled", async () => {
+it("separates cached readiness across networks and requires production opt-in", async () => {
   const { feeStatus } = await import("./service");
   expect((await feeStatus()).network).toBe("devnet");
   vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
@@ -74,8 +74,20 @@ it("separates cached readiness across networks and keeps production disabled", a
   });
   expect(calls.runtime).toHaveBeenCalledTimes(2);
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  vi.stubEnv("CREATOR_FEES_ENABLED", "false");
   expect(await feeStatus()).toMatchObject({
     enabled: false,
     escrowAvailable: false,
   });
+});
+
+it("allows explicitly enabled production mainnet and still validates runtime", async () => {
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
+  const { feeStatus } = await import("./service");
+  expect(await feeStatus()).toMatchObject({
+    enabled: true,
+    escrowAvailable: true,
+  });
+  expect(calls.runtime).toHaveBeenCalledTimes(1);
 });

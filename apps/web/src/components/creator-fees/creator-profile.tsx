@@ -10,7 +10,7 @@ import type { feeRecipient } from "@/lib/creator-fees/service";
 import "./creator-fees.css";
 type Account = Awaited<ReturnType<typeof feeRecipient>>;
 export function CreatorProfile({ id }: { id: string }) {
-  const { status, error: statusError, staging } = useFeeStatus();
+  const { status, error: statusError, available } = useFeeStatus();
   const [data, setData] = useState<Account | null>(null);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -84,10 +84,10 @@ export function CreatorProfile({ id }: { id: string }) {
           </button>
         </p>
       )}
-      {(!staging || (status && !status.enabled)) && (
+      {(!available || (status && !status.enabled)) && (
         <p className="lp-notice">Creator profiles are unavailable.</p>
       )}
-      {staging &&
+      {available &&
         !data &&
         loading &&
         !error &&

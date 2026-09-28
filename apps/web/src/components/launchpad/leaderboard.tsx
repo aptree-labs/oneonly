@@ -25,9 +25,9 @@ export function Leaderboard({
   initial?: TraderLeaderboard;
   initialTab?: "traders" | "recipients";
 }) {
-  const { wallet, network, staging } = useLaunchpad();
+  const { wallet, network, creatorFeesEnabled } = useLaunchpad();
   const [tab, setTab] = useState<"traders" | "recipients">(
-    staging ? initialTab : "traders",
+    creatorFeesEnabled ? initialTab : "traders",
   );
   const [period, setPeriod] = useState<LeaderboardPeriod>("24h");
   const [data, setData] = useState(initial);
@@ -107,7 +107,7 @@ export function Leaderboard({
           aria-hidden="true"
         />
       </header>
-      {staging && (
+      {creatorFeesEnabled && (
         <div className="cf-tabs" role="group" aria-label="Leaderboard type">
           <button
             type="button"
@@ -125,7 +125,7 @@ export function Leaderboard({
           </button>
         </div>
       )}
-      {tab === "recipients" && staging ? (
+      {tab === "recipients" && creatorFeesEnabled ? (
         <CreatorLeaderboard />
       ) : (
         <>

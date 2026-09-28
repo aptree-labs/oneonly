@@ -161,6 +161,8 @@ it("enables canonical mainnet only with explicit staging opt-in and matching con
   );
   expect(mock.assertNetwork).toHaveBeenCalledOnce();
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  expect((await creatorFeeRuntime()).verifierEpoch).toBe(1n);
+  vi.stubEnv("CREATOR_FEES_ENABLED", "false");
   await expect(creatorFeeRuntime()).rejects.toThrow("not enabled");
 });
 it("rejects the devnet program on opted-in mainnet before RPC", async () => {
