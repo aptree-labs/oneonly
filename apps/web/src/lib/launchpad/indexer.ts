@@ -34,7 +34,7 @@ import {
   TICKER_INACTIVITY_DAYS,
   DAY,
   formatUnits,
-  isReservedPlatformTicker,
+  isReservedLaunchTicker,
 } from "@oneonly/core";
 import { historicalUsd } from "./price";
 import { reconcile } from "./transactions";
@@ -337,7 +337,7 @@ export async function releaseInactiveTickers(now = new Date()) {
       .where(eq(tickerClaims.network, NETWORK));
   let released = 0;
   for (const claim of claims) {
-    if (isReservedPlatformTicker(claim.ticker)) continue;
+    if (isReservedLaunchTicker(claim.ticker)) continue;
     const pools = await db
       .select()
       .from(launchTokens)

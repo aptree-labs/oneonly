@@ -20,7 +20,7 @@ it("does not interpret category filters, addresses or free text as launch parame
   expect(createTickerHref("12345678901", "MET")).toBeNull();
 });
 it("never offers to create the reserved platform brand or look-alikes", () => {
-  for (const ticker of ["ONEONLY", "1only", "10nly", "ONEONLY2"])
+  for (const ticker of ["ONEONLY", "1only", "10nly", "ONEONLY2", "ONLYONE", "ONLY1", "0NLY0NE"])
     expect(createTickerHref(ticker, "JUP")).toBeNull();
 });
 

@@ -18,10 +18,17 @@ export function isReservedPlatformTicker(raw: string): boolean {
     .replace(/[\s=+_,><\/?-]/g, "")
     .toUpperCase()
     .replace(/^[1IL](?=[O0]N)/, "ONE")
+    .replace(/([O0]N[L1I]Y)1/g, "$1ONE")
+    .replace(/([O0]N[L1I]Y)[IL]$/, "$1ONE")
     .replace(/0/g, "O")
     .replace(/3/g, "E")
     .replace(/[1I]/g, "L");
-  const brand = PLATFORM_TOKEN_TICKER;
+  return [PLATFORM_TOKEN_TICKER, "ONLYONE"].some((brand) =>
+    resemblesReservedBrand(ticker, brand),
+  );
+}
+
+function resemblesReservedBrand(ticker: string, brand: string): boolean {
   if (ticker.includes(brand)) return true;
   if (Math.abs(ticker.length - brand.length) > 1) return false;
   // Levenshtein distance <= 1: a missing, extra, or substituted character.
@@ -39,4 +46,17 @@ export function isReservedPlatformTicker(raw: string): boolean {
     if (ticker.length <= brand.length) b++;
   }
   return edits + (ticker.length - a) + (brand.length - b) <= 1;
+}
+
+/** Exact moderated ticker names; do not fuzzy-match short names such as X. */
+export function isReservedLaunchTicker(raw: string): boolean {
+  const normalized = raw
+    .trim()
+    .replace(/^\$/, "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  return (
+    ["X", "PHANTOM", "ONEPHANTOM", "FRIENDZY"].includes(normalized) ||
+    isReservedPlatformTicker(raw)
+  );
 }

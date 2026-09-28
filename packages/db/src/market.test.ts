@@ -1,4 +1,4 @@
-import { PLATFORM_TOKEN_MINT } from "@oneonly/core";
+import { PLATFORM_TOKEN_MINT, HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
@@ -391,16 +391,14 @@ it("finds tokens by fee recipient without duplicates and returns card recipient 
     { xId: "1001", username: "example", name: "Example Creator" },
     { xId: "1002", username: "example2", name: "Example Two" },
   ]);
-  await local.db
-    .insert(creatorFeePools)
-    .values({
-      tokenId: tokens[0].id,
-      network: "devnet",
-      pool: tokens[0].pool,
-      mint: tokens[0].mint,
-      escrow: "escrow",
-      program: "program",
-    });
+  await local.db.insert(creatorFeePools).values({
+    tokenId: tokens[0].id,
+    network: "devnet",
+    pool: tokens[0].pool,
+    mint: tokens[0].mint,
+    escrow: "escrow",
+    program: "program",
+  });
   await local.db.insert(creatorFeeAllocations).values([
     { tokenId: tokens[0].id, xId: "1001", shareBps: 7000 },
     { tokenId: tokens[0].id, xId: "1002", shareBps: 3000 },
@@ -425,4 +423,79 @@ it("finds tokens by fee recipient without duplicates and returns card recipient 
       })
     ).tokens,
   ).toHaveLength(0);
+});
+
+it("excludes moderated mainnet tokens from listings, counts and exact searches before pagination", async () => {
+  const hidden = {
+    ...tokens[0],
+    id: HIDDEN_MAINNET_TOKEN_IDS[0],
+    network: "mainnet-beta",
+    ticker: "ONLYONE",
+    name: "Only One",
+    mint: "moderated-mint",
+    pool: "moderated-pool",
+    activatedAt: now,
+  };
+  await local.db.insert(launchTokens).values(hidden);
+  for (const sort of [
+    "newest",
+    "volume",
+    "market-cap",
+    "recent-buys",
+    "oldest",
+    "relevance",
+  ] as const) {
+    const first = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+    });
+    const second = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+      page: 1,
+    });
+    expect(first.total).toBe(26);
+    expect(first.tokens).toHaveLength(24);
+    expect(second.tokens).toHaveLength(2);
+    expect(
+      [...first.tokens, ...second.tokens].some((t) => t.id === hidden.id),
+    ).toBe(false);
+  }
+  for (const search of [hidden.ticker, hidden.mint]) {
+    const result = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      search,
+    });
+    expect(result.tokens).toEqual([]);
+    expect(result.total).toBe(0);
+  }
+});
+
+it("delists every explicitly moderated token without deleting its record", async () => {
+  for (const [index, id] of HIDDEN_MAINNET_TOKEN_IDS.entries()) {
+    if (index === 0) continue;
+    const token = {
+      ...tokens[0],
+      id,
+      network: "mainnet-beta",
+      ticker: `MOD${index}`,
+      mint: `moderated-mint-${index}`,
+      pool: `moderated-pool-${index}`,
+    };
+    await local.db.insert(launchTokens).values(token);
+    const result = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      search: token.mint,
+    });
+    expect(result.tokens).toEqual([]);
+    expect(result.total).toBe(0);
+    const stored = await local.db.select().from(launchTokens);
+    expect(stored.some((row) => row.id === id && row.status === "active")).toBe(
+      true,
+    );
+  }
 });
