@@ -4,6 +4,8 @@ import {
   poolSnapshots,
   tokenTrades,
   creatorFeePools,
+  creatorFeeAllocations,
+  creatorFeeProfiles,
   eq,
   and,
   desc,
@@ -52,19 +54,48 @@ export async function tokenDetail(id: string, live = false) {
   const feePools =
     process.env.ONEONLY_ENVIRONMENT === "staging" && token.network === NETWORK
       ? await db
-          .select({ tokenId: creatorFeePools.tokenId })
+          .select({
+            tokenId: creatorFeePools.tokenId,
+            xId: creatorFeeProfiles.xId,
+            username: creatorFeeProfiles.username,
+            name: creatorFeeProfiles.name,
+            avatar: creatorFeeProfiles.avatar,
+            shareBps: creatorFeeAllocations.shareBps,
+          })
           .from(creatorFeePools)
+          .leftJoin(
+            creatorFeeAllocations,
+            eq(creatorFeeAllocations.tokenId, creatorFeePools.tokenId),
+          )
+          .leftJoin(
+            creatorFeeProfiles,
+            eq(creatorFeeProfiles.xId, creatorFeeAllocations.xId),
+          )
           .where(
             and(
               eq(creatorFeePools.tokenId, id),
               eq(creatorFeePools.network, NETWORK),
             ),
           )
-          .limit(1)
+          .orderBy(desc(creatorFeeAllocations.shareBps), creatorFeeProfiles.xId)
+          .limit(8)
       : [];
   const value = {
     ...token,
     feeSharing: feePools.length > 0,
+    feeRecipients: feePools.flatMap((row) =>
+      row.xId && row.username && row.shareBps !== null
+        ? [
+            {
+              xId: row.xId,
+              username: row.username,
+              name: row.name ?? row.username,
+              avatar: row.avatar,
+              shareBps: row.shareBps,
+            },
+          ]
+        : [],
+    ),
     marketCapUsd: marketValue(token, current, references, quoteAssets()),
     priceUsd: marketValue(
       token,

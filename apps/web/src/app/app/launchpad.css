@@ -4131,3 +4131,37 @@ body:has(.launchpad[data-theme="dark"])
   opacity: 0.75;
   white-space: nowrap;
 }
+
+.lp-token-creators {
+  margin: 24px 0;
+}
+.lp-token-creator-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 10px;
+}
+.lp-token-creator {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 16px;
+  border: 1px solid var(--lp-border);
+  border-radius: 12px;
+  min-width: 230px;
+  max-width: 100%;
+}
+.lp-token-creator:hover {
+  background: var(--lp-surface);
+}
+.lp-token-creator-share {
+  margin-left: auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .lp-token-creator {
+    width: 100%;
+    min-width: 0;
+  }
+}

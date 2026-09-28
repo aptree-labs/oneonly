@@ -9,6 +9,8 @@ import { TraderComments } from "./comments";
 import type { Token } from "./explore";
 import { UsdValue } from "./usd-value";
 import { TradePanel } from "./trade-panel";
+import { FeeIdentity } from "../creator-fees/profile";
+import "../creator-fees/creator-fees.css";
 type Trade = {
   id: string;
   side: string;
@@ -194,6 +196,29 @@ export function TokenDetail({ id, initial }: { id: string; initial?: Detail }) {
                     </a>
                   ),
               )}
+            </div>
+          )}
+          {app.staging && !!token.feeRecipients?.length && (
+            <div
+              className="lp-token-creators"
+              aria-label="Creator fee recipients"
+            >
+              <span className="lp-caption">Creator fee shares</span>
+              <div className="lp-token-creator-list">
+                {token.feeRecipients.map((profile) => (
+                  <Link
+                    key={profile.xId}
+                    prefetch={false}
+                    href={`/app/creator-fees?recipient=${profile.xId}`}
+                    className="lp-token-creator"
+                  >
+                    <FeeIdentity profile={profile} />
+                    <strong className="lp-token-creator-share">
+                      {profile.shareBps / 100}%
+                    </strong>
+                  </Link>
+                ))}
+              </div>
             </div>
           )}
           <div className="lp-row">
