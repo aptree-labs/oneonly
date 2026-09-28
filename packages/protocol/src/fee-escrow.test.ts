@@ -326,7 +326,7 @@ it("refuses allocation initialization on mainnet without staging opt-in", async 
       program,
       recipients: [{ xId: "12345", shareBps: 10000 }],
     }),
-  ).rejects.toThrow("explicitly enabled staging");
+  ).rejects.toThrow("not enabled in this environment");
   expect(rpc.getAccountInfo).not.toHaveBeenCalled();
 });
 
@@ -488,7 +488,7 @@ it("allows only the deployed mainnet program in explicitly opted-in staging", as
   ).rejects.toThrow("does not match");
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
   await expect(appendFeeAllocation(new Transaction(), args)).rejects.toThrow(
-    "explicitly enabled staging",
+    "not enabled in this environment",
   );
   await expect(
     buildFeeCollection(
@@ -496,7 +496,7 @@ it("allows only the deployed mainnet program in explicitly opted-in staging", as
       wallet.toBase58(),
       MAINNET_FEE_ESCROW_PROGRAM,
     ),
-  ).rejects.toThrow("explicitly enabled staging");
+  ).rejects.toThrow("not enabled in this environment");
 });
 it("rejects mainnet escrow addresses in devnet collection and launch", async () => {
   await expect(
@@ -514,3 +514,75 @@ it("rejects mainnet escrow addresses in devnet collection and launch", async () 
     }),
   ).rejects.toThrow("does not match");
 });
+
+it.each(["dbc", "damm-v2"] as const)(
+  "builds production launch and %s collection with explicit feature opt-in",
+  async (venue) => {
+    mock.network = "mainnet-beta";
+    vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+    vi.stubEnv("CREATOR_FEES_ENABLED", "true");
+    vi.stubEnv("STAGING_MAINNET_ENABLED", "false");
+    const mainnetAllocation = allocationAddress(
+      pool,
+      MAINNET_FEE_ESCROW_PROGRAM,
+    );
+    const args = {
+      wallet: wallet.toBase58(),
+      pool: pool.toBase58(),
+      config: config.toBase58(),
+      mint: base.toBase58(),
+      quoteMint: NATIVE_MINT.toBase58(),
+      program: MAINNET_FEE_ESCROW_PROGRAM,
+      recipients: [{ xId: "12345", shareBps: 10000 }],
+    };
+    const launch = new Transaction();
+    await expect(appendFeeAllocation(launch, args)).resolves.toEqual(
+      mainnetAllocation,
+    );
+    expect(launch.instructions[0].programId).toEqual(
+      MAINNET_FEE_ESCROW_PROGRAM,
+    );
+    await expect(
+      appendFeeAllocation(new Transaction(), { ...args, program }),
+    ).rejects.toThrow("does not match");
+    market(NATIVE_MINT, venue === "damm-v2");
+    const fixture = await mock.market();
+    fixture.virtual.poolState.creator = mainnetAllocation;
+    await expect(
+      buildFeeCollection(
+        pool.toBase58(),
+        wallet.toBase58(),
+        MAINNET_FEE_ESCROW_PROGRAM,
+        venue,
+      ),
+    ).resolves.toBeDefined();
+    await expect(
+      buildFeeCollection(pool.toBase58(), wallet.toBase58(), program, venue),
+    ).rejects.toThrow("does not match");
+    vi.stubEnv("CREATOR_FEES_ENABLED", "false");
+    await expect(appendFeeAllocation(new Transaction(), args)).rejects.toThrow(
+      "not enabled in this environment",
+    );
+    await expect(
+      buildFeeCollection(
+        pool.toBase58(),
+        wallet.toBase58(),
+        MAINNET_FEE_ESCROW_PROGRAM,
+        venue,
+      ),
+    ).rejects.toThrow("not enabled in this environment");
+  },
+);
+
+it.each(["staging", "preview", ""])(
+  "does not treat the production flag as mainnet opt-in for %s",
+  async (environment) => {
+    mock.network = "mainnet-beta";
+    vi.stubEnv("ONEONLY_ENVIRONMENT", environment);
+    vi.stubEnv("CREATOR_FEES_ENABLED", "true");
+    vi.stubEnv("STAGING_MAINNET_ENABLED", "false");
+    await expect(
+      feeMarket(pool.toBase58(), MAINNET_FEE_ESCROW_PROGRAM),
+    ).rejects.toThrow("not enabled in this environment");
+  },
+);

@@ -25,12 +25,14 @@ import {
 import type { Transaction, TransactionInstruction } from "@solana/web3.js";
 function assertFeeSharingNetwork(program: PublicKey) {
   if (NETWORK === "mainnet-beta") {
-    if (
-      process.env.ONEONLY_ENVIRONMENT !== "staging" ||
-      process.env.STAGING_MAINNET_ENABLED !== "true"
-    )
+    const enabled =
+      (process.env.ONEONLY_ENVIRONMENT === "staging" &&
+        process.env.STAGING_MAINNET_ENABLED === "true") ||
+      (process.env.ONEONLY_ENVIRONMENT === "production" &&
+        process.env.CREATOR_FEES_ENABLED === "true");
+    if (!enabled)
       throw new ProtocolError(
-        "Mainnet fee sharing is only available in explicitly enabled staging.",
+        "Mainnet fee sharing is not enabled in this environment.",
       );
     assertFeeEscrowProgram(NETWORK, program);
   } else if (program.equals(MAINNET_FEE_ESCROW_PROGRAM)) {
