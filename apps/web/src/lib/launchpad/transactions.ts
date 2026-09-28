@@ -1,3 +1,4 @@
+import { validateLaunchSimulation } from "./launch-simulation";
 import { SendTransactionError } from "@solana/web3.js";
 import {
   prepareLaunchAllocation,
@@ -89,6 +90,7 @@ export async function prepareIntent(
     signer ? (Array.isArray(signer) ? signer : [signer]) : [],
     { omitAddedPriorityFeeIfOversize: kind === "creator-fee-claim" },
   );
+  if (kind === "launch") await validateLaunchSimulation(connection(), wire);
   const reviewDetails = {
     network: NETWORK,
     ...details,

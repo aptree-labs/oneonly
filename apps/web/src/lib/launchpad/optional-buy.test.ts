@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   prices: vi.fn(),
   conversion: vi.fn(),
   balance: vi.fn(),
+  simulation: vi.fn(),
   intents: {} as object,
   values: [] as Record<string, any>[],
 }));
@@ -75,6 +76,9 @@ vi.mock("./auth", () => ({
   origin: () => "https://app.oneonly.lol",
   string: String,
 }));
+vi.mock("./launch-simulation", () => ({
+  validateLaunchSimulation: mocks.simulation,
+}));
 vi.mock("./price", () => ({ prices: mocks.prices }));
 vi.mock("./launch-conversion", () => ({ launchConversion: mocks.conversion }));
 import { launch } from "./transactions";
@@ -91,6 +95,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.values.length = 0;
   mocks.balance.mockResolvedValue(100_000_000);
+  mocks.simulation.mockReset().mockResolvedValue(undefined);
   mocks.createLaunch.mockResolvedValue({
     transaction: {},
     pool: "pool",
@@ -137,5 +142,17 @@ it("rejects an unfunded launch before creating a pool or pending intent", async 
     launch("11111111111111111111111111111111", input),
   ).rejects.toThrow(/has no .* SOL/);
   expect(mocks.createLaunch).not.toHaveBeenCalled();
+  expect(mocks.values).toHaveLength(0);
+});
+
+it("does not return an approval intent when a funded launch fails simulation", async () => {
+  mocks.balance.mockResolvedValue(1_000_000);
+  mocks.simulation.mockRejectedValue(
+    new Error("Not enough SOL for creation rent"),
+  );
+  await expect(
+    launch("11111111111111111111111111111111", input),
+  ).rejects.toThrow("Not enough SOL");
+  expect(mocks.simulation).toHaveBeenCalledOnce();
   expect(mocks.values).toHaveLength(0);
 });
