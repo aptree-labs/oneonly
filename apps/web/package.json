@@ -13,10 +13,12 @@
     "@number-flow/react": "^0.6.2",
     "@oneonly/core": "workspace:*",
     "@oneonly/db": "workspace:*",
+    "@oneonly/fee-escrow": "workspace:*",
     "@oneonly/protocol": "workspace:*",
     "@solana/wallet-adapter-base": "^0.9.27",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-solflare": "^0.6.34",
     "@solana/web3.js": "^1.98.4",
     "@vercel/analytics": "^2.0.1",
     "bs58": "^6.0.0",
@@ -27,8 +29,7 @@
     "next": "^16.1.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "sharp": "^0.35.4",
-    "@oneonly/fee-escrow": "workspace:*"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@types/react": "^19.2.0",

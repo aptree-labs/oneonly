@@ -26,6 +26,8 @@ import {
   useWalletModal,
 } from "@solana/wallet-adapter-react-ui";
 import { Transaction, VersionedTransaction } from "@solana/web3.js";
+import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
+import { SolflareWalletAdapter } from "@solana/wallet-adapter-solflare";
 import { Buffer } from "buffer";
 import bs58 from "bs58";
 import Link from "next/link";
@@ -912,7 +914,17 @@ export function LaunchpadProvider({
   staging?: boolean;
   initialTheme: Theme;
 }) {
-  const wallets = useMemo(() => [], []);
+  const wallets = useMemo(
+    () => [
+      new SolflareWalletAdapter({
+        network:
+          network === "mainnet-beta"
+            ? WalletAdapterNetwork.Mainnet
+            : WalletAdapterNetwork.Devnet,
+      }),
+    ],
+    [network],
+  );
   return (
     <ConnectionProvider endpoint={publicRpc(network)}>
       <WalletProvider wallets={wallets} autoConnect>
