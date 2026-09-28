@@ -33,80 +33,70 @@ async function token(
   const id = randomUUID(),
     quote = config.quote ?? "SOL",
     decimals = quote === "SOL" ? 9 : 6;
-  await local.db
-    .insert(launchTokens)
-    .values({
-      id,
-      network: config.network ?? "devnet",
-      status: config.status ?? "active",
-      ticker: "TEST",
-      name: "Test",
-      description: "",
-      imageId: randomUUID(),
-      creator: "wallet",
-      quote,
-      quoteMint: quote.toLowerCase(),
-      quoteDecimals: decimals,
-      mint: id,
-      pool: id,
-      config: "config",
-    });
-  await local.db
-    .insert(poolSnapshots)
-    .values({
-      tokenId: id,
-      priceQuote: "0.01",
-      marketCapQuote: "10",
-      quoteReserve: "1",
-      progress: 1,
-      creatorQuoteFee: "0",
-    });
-  await local.db
-    .insert(creatorFeePools)
-    .values({
-      tokenId: id,
-      network: config.network ?? "devnet",
-      pool: id,
-      mint: id,
-      escrow: id,
-      program: "program",
-    });
+  await local.db.insert(launchTokens).values({
+    id,
+    network: config.network ?? "devnet",
+    status: config.status ?? "active",
+    ticker: "TEST",
+    name: "Test",
+    description: "",
+    imageId: randomUUID(),
+    creator: "wallet",
+    quote,
+    quoteMint: quote.toLowerCase(),
+    quoteDecimals: decimals,
+    mint: id,
+    pool: id,
+    config: "config",
+  });
+  await local.db.insert(poolSnapshots).values({
+    tokenId: id,
+    priceQuote: "0.01",
+    marketCapQuote: "10",
+    quoteReserve: "1",
+    progress: 1,
+    creatorQuoteFee: "0",
+  });
+  await local.db.insert(creatorFeePools).values({
+    tokenId: id,
+    network: config.network ?? "devnet",
+    pool: id,
+    mint: id,
+    escrow: id,
+    program: "program",
+  });
   await local.db
     .insert(creatorFeeAllocations)
     .values({ tokenId: id, xId, shareBps: 10000 });
   if (earned !== null)
-    await local.db
-      .insert(creatorFeeBalanceSnapshots)
-      .values({
-        tokenId: id,
-        xId,
-        observedAt: new Date(),
-        balances: [
-          {
-            mint: config.mint ?? quote.toLowerCase(),
-            symbol: quote,
-            decimals,
-            amountAtomic: String(earned - (config.claimed ?? 0)),
-            claimedAtomic: String(config.claimed ?? 0),
-            totalEntitlementAtomic: String(earned),
-            pendingAtomic: String(config.pending ?? 0),
-            pendingVenue: "dbc",
-          },
-        ],
-      });
+    await local.db.insert(creatorFeeBalanceSnapshots).values({
+      tokenId: id,
+      xId,
+      observedAt: new Date(),
+      balances: [
+        {
+          mint: config.mint ?? quote.toLowerCase(),
+          symbol: quote,
+          decimals,
+          amountAtomic: String(earned - (config.claimed ?? 0)),
+          claimedAtomic: String(config.claimed ?? 0),
+          totalEntitlementAtomic: String(earned),
+          pendingAtomic: String(config.pending ?? 0),
+          pendingVenue: "dbc",
+        },
+      ],
+    });
   return id;
 }
 beforeAll(async () => {
   local = await createLocalDatabase();
-  await local.db
-    .insert(creatorFeeProfiles)
-    .values(
-      Array.from({ length: 28 }, (_, i) => ({
-        xId: String(i + 1),
-        username: `creator${i + 1}`,
-        name: `Creator ${i + 1}`,
-      })),
-    );
+  await local.db.insert(creatorFeeProfiles).values(
+    Array.from({ length: 28 }, (_, i) => ({
+      xId: String(i + 1),
+      username: `creator${i + 1}`,
+      name: `Creator ${i + 1}`,
+    })),
+  );
   await token("1", 1_000_000_000, { claimed: 998_000_000 });
   await token("2", 60_000_000, { quote: "USDC" });
   await token("2", 60_000_000, { quote: "USDC" });
