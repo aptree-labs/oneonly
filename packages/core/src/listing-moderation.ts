@@ -6,4 +6,6 @@ export const HIDDEN_MAINNET_TOKEN_IDS = [
   "efb2ee5f-98e1-48d6-b898-b39708314066", // X
   "2bcf58cb-c762-43d0-bb69-036fe0b79cd1", // FRIENDZY
   "69b7002f-fd9e-473d-9dbb-5e93f0ea0152", // ONEPHANTOM
+  // Production acceptance-test launch, excluded from public discovery and rankings.
+  "f730595f-2aa8-496f-97f8-12d2ea9ca8f3", // GATEWAY
 ] as const;

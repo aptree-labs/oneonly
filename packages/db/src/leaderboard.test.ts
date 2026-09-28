@@ -1,3 +1,4 @@
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
@@ -135,4 +136,28 @@ it("bounds results at 100, preserves total count, and deterministically orders t
   expect(result.traders).toHaveLength(100);
   expect(result.traders[1].wallet).toBe("wallet-000");
   expect(result.traders[99].rank).toBe(100);
+});
+
+it("does not rank trading activity from delisted mainnet tokens", async () => {
+  const id = HIDDEN_MAINNET_TOKEN_IDS[0];
+  await local.db
+    .insert(launchTokens)
+    .values({ ...tokens[0], id, mint: "hidden-mint", pool: "hidden-pool" });
+  await local.db
+    .insert(tokenTrades)
+    .values({
+      tokenId: id,
+      signature: "hidden-trade",
+      eventIndex: 0,
+      wallet: "hidden-trader",
+      side: "buy",
+      venue: "dbc",
+      volumeUsd: 1000000,
+      baseAmount: "1",
+      quoteAmount: "1",
+      priceQuote: "1",
+      blockTime: new Date(now.getTime() - 3600000),
+    });
+  const result = await traderLeaderboard(local.db, "mainnet-beta", "all", now);
+  expect(result.traders.some((t) => t.wallet === "hidden-trader")).toBe(false);
 });

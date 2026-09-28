@@ -1,8 +1,11 @@
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { beforeAll, afterAll, afterEach, expect, it, vi } from "vitest";
 import { createHash, randomUUID, randomBytes } from "node:crypto";
 import {
   createLocalDatabase,
   creatorFeeProfiles,
+  creatorFeePools,
+  launchTokens,
   creatorFeeBindings,
   creatorFeeChallenges,
   creatorFeeAllocations,
@@ -528,4 +531,49 @@ it("discovers profiles with no allocations and loads prefill without on-chain re
   expect(
     (await feeRecipients("", 0, db)).recipients.some((r) => r.xId === "99001"),
   ).toBe(false);
+});
+
+it("hides test-only creators and public allocations without deleting private fee access", async () => {
+  enable();
+  vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  await seed("99002", "wallet99002");
+  const id = HIDDEN_MAINNET_TOKEN_IDS[0];
+  await db.insert(launchTokens).values({
+    id,
+    network: "mainnet-beta",
+    status: "active",
+    ticker: "HIDDEN",
+    name: "Hidden test",
+    description: "",
+    imageId: randomUUID(),
+    creator: "wallet99002",
+    quote: "SOL",
+    quoteMint: "sol",
+    quoteDecimals: 9,
+    mint: id,
+    pool: id,
+    config: "config",
+  });
+  await db
+    .insert(creatorFeePools)
+    .values({
+      tokenId: id,
+      network: "mainnet-beta",
+      pool: id,
+      mint: id,
+      escrow: id,
+      program: "program",
+    });
+  await db
+    .insert(creatorFeeAllocations)
+    .values({ tokenId: id, xId: "99002", shareBps: 10000 });
+  expect((await feeRecipients("@user99002", 0, db)).recipients).toEqual([]);
+  expect(
+    (await feeRecipients("", 0, db)).recipients.some((r) => r.xId === "99002"),
+  ).toBe(false);
+  expect((await feeRecipient("99002", db)).allocations).toEqual([]);
+  expect(
+    (await feeDashboard("wallet99002", db)).allocations.map((a) => a.tokenId),
+  ).toEqual([id]);
 });

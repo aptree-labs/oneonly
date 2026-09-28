@@ -1,3 +1,4 @@
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { NETWORK } from "@oneonly/protocol";
 import {
   getDatabase,
@@ -146,17 +147,24 @@ export type RecipientAssetTotal = {
 export async function recipientFeeTotals(xIds: string[], database?: Database) {
   if (!xIds.length) return [];
   const db = database ?? (await getDatabase());
+  const visible =
+    NETWORK === "mainnet-beta"
+      ? sql`and p.token_id not in (${sql.join(
+          HIDDEN_MAINNET_TOKEN_IDS.map((id) => sql`${id}`),
+          sql`, `,
+        )})`
+      : sql``;
   return db
     .select({
       xId: creatorFeeProfiles.xId,
-      observedTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at is not null)`,
-      freshTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at > now() - interval '2 minutes')`,
+      observedTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} ${visible} and s.observed_at is not null)`,
+      freshTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} ${visible} and s.observed_at > now() - interval '2 minutes')`,
       lastUpdated: sql<
         string | null
-      >`(select min(s.observed_at) from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK})`,
+      >`(select min(s.observed_at) from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} ${visible})`,
       balances: sql<
         RecipientAssetTotal[] | null
-      >`(select jsonb_agg(asset) from (select e->>'mint' as mint,e->>'symbol' as symbol,(e->>'decimals')::int as decimals,sum((e->>'amountAtomic')::numeric)::text as "amountAtomic",sum((e->>'pendingAtomic')::numeric)::text as "pendingAtomic" from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id cross join lateral jsonb_array_elements(s.balances) e where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at is not null group by e->>'mint',e->>'symbol',e->>'decimals' order by e->>'mint') asset)`,
+      >`(select jsonb_agg(asset) from (select e->>'mint' as mint,e->>'symbol' as symbol,(e->>'decimals')::int as decimals,sum((e->>'amountAtomic')::numeric)::text as "amountAtomic",sum((e->>'pendingAtomic')::numeric)::text as "pendingAtomic" from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id cross join lateral jsonb_array_elements(s.balances) e where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} ${visible} and s.observed_at is not null group by e->>'mint',e->>'symbol',e->>'decimals' order by e->>'mint') asset)`,
     })
     .from(creatorFeeProfiles)
     .where(inArray(creatorFeeProfiles.xId, xIds));

@@ -21,6 +21,7 @@ export {
   asc,
   sql,
   inArray,
+  notInArray,
   isNull,
 } from "drizzle-orm";
 

@@ -1,4 +1,15 @@
-import { and, asc, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  notInArray,
+  lt,
+  sql,
+} from "drizzle-orm";
 import { launchTokens, tokenTrades, walletProfiles } from "./schema";
 import type { Database } from "./index";
 
@@ -41,6 +52,9 @@ export async function traderLeaderboard(
     .where(
       and(
         eq(launchTokens.network, network),
+        network === "mainnet-beta"
+          ? notInArray(launchTokens.id, [...HIDDEN_MAINNET_TOKEN_IDS])
+          : undefined,
         inArray(launchTokens.status, ["active", "released"]),
         inArray(tokenTrades.side, ["buy", "sell"]),
         sql`${tokenTrades.wallet} <> ''`,

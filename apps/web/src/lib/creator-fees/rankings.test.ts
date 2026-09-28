@@ -1,3 +1,4 @@
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import { beforeAll, afterAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
@@ -22,6 +23,7 @@ async function token(
   xId: string,
   earned: number | null,
   config: {
+    id?: string;
     network?: string;
     status?: string;
     quote?: string;
@@ -30,7 +32,7 @@ async function token(
     mint?: string;
   } = {},
 ) {
-  const id = randomUUID(),
+  const id = config.id ?? randomUUID(),
     quote = config.quote ?? "SOL",
     decimals = quote === "SOL" ? 9 : 6;
   await local.db.insert(launchTokens).values({
@@ -160,4 +162,32 @@ it("new pending earnings accumulate while previously paid amounts stay out of cl
   expect(row.balances?.[0].amountAtomic).toBe("2500000");
   expect(row.balances?.[0].pendingAtomic).toBe("1500000");
   expect(row.feesUsd).toBeCloseTo(100.2);
+});
+
+it("excludes delisted test allocations and balances before ranking or counting creators", async () => {
+  await local.db.insert(creatorFeeProfiles).values([
+    { xId: "8801", username: "moderatedonly", name: "Moderated Only" },
+    { xId: "8802", username: "moderatedmixed", name: "Moderated Mixed" },
+  ]);
+  await token("8801", 9_000_000_000, {
+    network: "mainnet-beta",
+    id: HIDDEN_MAINNET_TOKEN_IDS[0],
+  });
+  await token("8802", 8_000_000_000, {
+    network: "mainnet-beta",
+    id: HIDDEN_MAINNET_TOKEN_IDS[1],
+  });
+  await token("8802", 1_000_000_000, { network: "mainnet-beta" });
+  for (const sort of ["fees", "tokens"] as const) {
+    const result = await creatorRankings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      query: "moderated",
+      sort,
+    });
+    expect(
+      result.creators.map((r) => [r.xId, r.tokenCount, r.feesUsd]),
+    ).toEqual([["8802", 1, 100]]);
+    expect(result.creators[0].balances?.[0].earnedAtomic).toBe("1000000000");
+  }
 });

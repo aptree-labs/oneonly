@@ -18,12 +18,17 @@ import {
   launchTokens,
   eq,
   and,
+  notInArray,
   gt,
   desc,
   sql,
   type Database,
 } from "@oneonly/db";
-import { validateFeeRecipients, completeCreatorFeeShares } from "@oneonly/core";
+import {
+  HIDDEN_MAINNET_TOKEN_IDS,
+  validateFeeRecipients,
+  completeCreatorFeeShares,
+} from "@oneonly/core";
 import { client, PublicKey, NETWORK } from "@oneonly/protocol";
 import { FeeError, lookupX, verifyXPost, type FeeProfile } from "./provider";
 import { creatorFeeRuntime } from "./runtime";
@@ -301,7 +306,12 @@ async function bindingFor(wallet: string, db: Database) {
     throw new FeeError("Bind your verified X account and wallet first.", 409);
   return binding;
 }
-async function allocationsFor(xId: string, db: Database, offset = 0) {
+async function allocationsFor(
+  xId: string,
+  db: Database,
+  offset = 0,
+  publicOnly = false,
+) {
   const rows = await db
     .select({
       tokenId: creatorFeeAllocations.tokenId,
@@ -319,6 +329,9 @@ async function allocationsFor(xId: string, db: Database, offset = 0) {
       and(
         eq(creatorFeePools.network, NETWORK),
         eq(creatorFeeAllocations.xId, xId),
+        publicOnly && NETWORK === "mainnet-beta"
+          ? notInArray(launchTokens.id, [...HIDDEN_MAINNET_TOKEN_IDS])
+          : undefined,
       ),
     )
     .orderBy(creatorFeeAllocations.tokenId)
@@ -434,7 +447,7 @@ export async function feeRecipient(
     profile,
     ...(profileOnly
       ? { allocations: [], hasMore: false }
-      : await allocationsFor(xId, db, offset)),
+      : await allocationsFor(xId, db, offset, true)),
   };
 }
 export async function feeRecipients(
@@ -463,6 +476,9 @@ export async function feeRecipients(
       and(
         eq(creatorFeePools.tokenId, creatorFeeAllocations.tokenId),
         eq(creatorFeePools.network, NETWORK),
+        NETWORK === "mainnet-beta"
+          ? notInArray(creatorFeePools.tokenId, [...HIDDEN_MAINNET_TOKEN_IDS])
+          : undefined,
       ),
     )
     .where(
@@ -471,7 +487,11 @@ export async function feeRecipients(
       ),
     )
     .groupBy(creatorFeeProfiles.xId)
-    .having(term ? undefined : sql`count(${creatorFeePools.tokenId}) > 0`)
+    .having(
+      term
+        ? sql`count(${creatorFeePools.tokenId}) > 0 or count(${creatorFeeAllocations.tokenId}) = 0`
+        : sql`count(${creatorFeePools.tokenId}) > 0`,
+    )
     .orderBy(
       desc(sql`count(${creatorFeePools.tokenId})`),
       creatorFeeProfiles.xId,

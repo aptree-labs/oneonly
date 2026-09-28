@@ -1,3 +1,4 @@
+import { HIDDEN_MAINNET_TOKEN_IDS } from "@oneonly/core";
 import {
   creatorFeeProfiles,
   creatorFeePools,
@@ -8,6 +9,7 @@ import {
   eq,
   and,
   inArray,
+  notInArray,
   sql,
   desc,
   type Database,
@@ -28,6 +30,17 @@ export async function creatorRankings(
   },
 ) {
   const term = options.query.trim().replace(/^@/, "").slice(0, 100);
+  const visibleToken =
+    options.network === "mainnet-beta"
+      ? notInArray(launchTokens.id, [...HIDDEN_MAINNET_TOKEN_IDS])
+      : undefined;
+  const visibleBalance =
+    options.network === "mainnet-beta"
+      ? sql`and t.id not in (${sql.join(
+          HIDDEN_MAINNET_TOKEN_IDS.map((id) => sql`${id}`),
+          sql`, `,
+        )})`
+      : sql``;
   const references = JSON.stringify(options.prices);
   const quoteUsd = sql`case when ${launchTokens.quoteMint} = (${references}::jsonb -> ${launchTokens.quote} ->> 'mint') then (${references}::jsonb -> ${launchTokens.quote} ->> 'usd')::numeric end`;
   const earned = sql`(coalesce((e->>'totalEntitlementAtomic')::numeric, (e->>'amountAtomic')::numeric + coalesce((e->>'claimedAtomic')::numeric,0)) + coalesce((e->>'pendingAtomic')::numeric,0))`;
@@ -78,7 +91,7 @@ export async function creatorRankings(
           join creator_fee_allocations a on a.token_id=s.token_id and a.x_id=s.x_id
           cross join lateral jsonb_array_elements(s.balances) e
           where s.x_id=${creatorFeeProfiles.xId} and p.network=${options.network} and t.network=${options.network}
-            and t.status in ('active','released') and s.observed_at is not null
+            and t.status in ('active','released') ${visibleBalance} and s.observed_at is not null
           group by e->>'mint', e->>'symbol', e->>'decimals' order by e->>'mint'
         ) asset
       )`,
@@ -110,6 +123,7 @@ export async function creatorRankings(
       and(
         eq(creatorFeePools.network, options.network),
         eq(launchTokens.network, options.network),
+        visibleToken,
         inArray(launchTokens.status, ["active", "released"]),
         sql`position(lower(${term}) in lower(${creatorFeeProfiles.username} || ' ' || ${creatorFeeProfiles.name})) > 0`,
       ),
