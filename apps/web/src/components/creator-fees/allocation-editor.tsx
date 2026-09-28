@@ -27,11 +27,13 @@ export function AllocationEditor({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const total = value.reduce((sum, row) => sum + row.shareBps, 0);
+  const remaining = Math.max(0, 10000 - total);
   const valid =
     !open ||
+    value.length === 0 ||
     (status?.escrowAvailable === true &&
       value.length > 0 &&
-      total === 10000 &&
+      total <= 10000 &&
       value.every((row) => row.shareBps > 0));
   useEffect(() => {
     onValidity(valid);
@@ -114,11 +116,16 @@ export function AllocationEditor({
         </span>
         <span>{open ? "Remove" : "Optional +"}</span>
       </button>
+      {!open && (
+        <p className="lp-caption" style={{ padding: "0 20px 16px" }}>
+          You keep 100% of creator fees unless you share them.
+        </p>
+      )}
       {open && (
         <div id="creator-fee-editor" className="cf-editor-body">
           <p className="lp-caption">
             Allocate your creator share to X accounts. Recipients can join
-            later.
+            later. Any remaining share automatically belongs to you.
           </p>
           {!status?.escrowAvailable && (
             <p className="lp-notice">
@@ -132,7 +139,10 @@ export function AllocationEditor({
           {status && !status.bindingAvailable && (
             <p className="lp-notice">X account linking is not available yet.</p>
           )}
-          <div className="cf-split" aria-label={`${total / 100}% allocated`}>
+          <div
+            className="cf-split"
+            aria-label={`${total / 100}% assigned, ${remaining / 100}% automatically yours`}
+          >
             {value.map((row, index) => (
               <span
                 key={row.xId}
@@ -142,7 +152,8 @@ export function AllocationEditor({
               />
             ))}
             <span
-              className="cf-unallocated"
+              className="cf-color-2"
+              title={`Your automatic share: ${remaining / 100}%`}
               style={{ flexGrow: Math.max(0, 10000 - total) }}
             />
           </div>
@@ -188,11 +199,25 @@ export function AllocationEditor({
             </div>
           ))}
           <div className="cf-allocation-total">
-            <span>Creator share allocated</span>
-            <strong className={total === 10000 ? "lp-valid" : ""}>
-              {total / 100}% / 100%
+            <span>Your automatic remaining share</span>
+            <strong>{remaining / 100}%</strong>
+          </div>
+          <p className="lp-caption">
+            {value.length === 0
+              ? "You keep 100% of creator fees in your creator wallet."
+              : "Your remaining share is assigned to the X account connected to your creator wallet. Any share you assign to that account above is added to it."}
+          </p>
+          <div className="cf-allocation-total">
+            <span>Total creator share</span>
+            <strong className={total <= 10000 ? "lp-valid" : ""}>
+              {(total + remaining) / 100}% / 100%
             </strong>
           </div>
+          {total > 10000 && (
+            <p className="lp-error" role="alert">
+              Shares cannot exceed 100%. Reduce a recipient’s share.
+            </p>
+          )}
           <label>
             Find an X account
             <input

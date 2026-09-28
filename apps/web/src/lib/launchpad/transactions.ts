@@ -2,7 +2,10 @@ import {
   prepareLaunchAllocation,
   reconcileLaunchAllocation,
 } from "../creator-fees/launch";
-import { resolveFeeAllocation } from "../creator-fees/service";
+import {
+  resolveFeeAllocation,
+  resolveCreatorFeeRemainder,
+} from "../creator-fees/service";
 import { randomUUID } from "node:crypto";
 import { resolveProjectLinks } from "./project-links";
 import { Effect, Either } from "effect";
@@ -122,6 +125,20 @@ export async function launch(
   rawConvertedAmount?: bigint,
 ) {
   await rateLimit(`launch:${wallet}`, 3);
+  if (
+    input &&
+    typeof input === "object" &&
+    !Array.isArray(input) &&
+    "feeRecipients" in input
+  ) {
+    input = {
+      ...input,
+      feeRecipients: await resolveCreatorFeeRemainder(
+        wallet,
+        input.feeRecipients,
+      ),
+    };
+  }
   const validated = await Effect.runPromise(
     Effect.either(validateLaunch(input)),
   );

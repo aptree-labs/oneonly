@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Effect } from "effect";
-import { validateFeeRecipients } from "./creator-fees";
+import {
+  validateFeeRecipients,
+  completeCreatorFeeShares,
+} from "./creator-fees";
 import { validateLaunch } from "./launchpad";
 
 describe("creator fee allocations", () => {
@@ -54,4 +57,47 @@ describe("creator fee allocations", () => {
     expect(value.feeRecipients).toEqual(feeRecipients);
     expect(value.initialBuy).toBe("0");
   });
+});
+
+it("automatically completes the creator share without duplicate identities", () => {
+  expect(completeCreatorFeeShares([], "123")).toEqual([]);
+  expect(
+    completeCreatorFeeShares([{ xId: "456", shareBps: 2000 }], "123"),
+  ).toEqual([
+    { xId: "456", shareBps: 2000 },
+    { xId: "123", shareBps: 8000 },
+  ]);
+  expect(
+    completeCreatorFeeShares(
+      [
+        { xId: "456", shareBps: 2000 },
+        { xId: "123", shareBps: 1000 },
+      ],
+      "123",
+    ),
+  ).toEqual([
+    { xId: "456", shareBps: 2000 },
+    { xId: "123", shareBps: 8000 },
+  ]);
+  expect(
+    completeCreatorFeeShares([{ xId: "456", shareBps: 10000 }], "123"),
+  ).toEqual([{ xId: "456", shareBps: 10000 }]);
+  expect(() =>
+    completeCreatorFeeShares(
+      [
+        { xId: "456", shareBps: 10000 },
+        { xId: "123", shareBps: 1 },
+      ],
+      "123",
+    ),
+  ).toThrow("exceed");
+  expect(() =>
+    completeCreatorFeeShares(
+      Array.from({ length: 8 }, (_, i) => ({
+        xId: String(i + 1),
+        shareBps: 100,
+      })),
+      "123",
+    ),
+  ).toThrow("Leave room");
 });

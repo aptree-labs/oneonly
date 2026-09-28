@@ -4,7 +4,10 @@ export type FeeRecipient = { xId: string; shareBps: number };
 export const MAX_FEE_RECIPIENTS = 8;
 
 /** Fixed creator-fee shares; user handles are never financial identities. */
-export function validateFeeRecipients(input: unknown): FeeRecipient[] {
+export function validateFeeRecipients(
+  input: unknown,
+  requireFullAllocation = true,
+): FeeRecipient[] {
   if (input === undefined) return [];
   const invalid = (message: string): never => {
     throw new LaunchError({ message, status: 400 });
@@ -31,7 +34,38 @@ export function validateFeeRecipients(input: unknown): FeeRecipient[] {
       return invalid("Each fee share must be between 0.01% and 100%.");
     return { xId, shareBps };
   });
-  if (recipients.reduce((sum, row) => sum + row.shareBps, 0) !== 10000)
+  const total = recipients.reduce((sum, row) => sum + row.shareBps, 0);
+  if (total > 10000) return invalid("Creator fee shares cannot exceed 100%.");
+  if (requireFullAllocation && total !== 10000)
     return invalid("Creator fee shares must total 100%.");
   return recipients;
+}
+
+/** Only pass the creator identity resolved from their authenticated wallet. */
+export function completeCreatorFeeShares(
+  input: unknown,
+  creatorXId: string,
+): FeeRecipient[] {
+  const recipients = validateFeeRecipients(input, false);
+  // No sharing keeps ordinary wallet-based creator collection unchanged.
+  if (!recipients.length) return [];
+  const remaining =
+    10000 - recipients.reduce((sum, row) => sum + row.shareBps, 0);
+  if (!remaining) return recipients;
+  const existing = recipients.find((row) => row.xId === creatorXId);
+  if (!existing && recipients.length === MAX_FEE_RECIPIENTS)
+    throw new LaunchError({
+      message:
+        "Leave room for your automatic share: choose up to 7 other recipients, or allocate the full 100%.",
+      status: 400,
+    });
+  return validateFeeRecipients(
+    existing
+      ? recipients.map((row) =>
+          row.xId === creatorXId
+            ? { ...row, shareBps: row.shareBps + remaining }
+            : row,
+        )
+      : [...recipients, { xId: creatorXId, shareBps: remaining }],
+  );
 }

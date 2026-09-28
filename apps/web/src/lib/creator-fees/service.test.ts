@@ -56,6 +56,7 @@ import {
   verifyFeeChallenge,
   verifiedFeeChallenge,
   resolveFeeAllocation,
+  resolveCreatorFeeRemainder,
 } from "./service";
 let db: Database, close: () => Promise<void>;
 beforeAll(async () => {
@@ -397,4 +398,42 @@ it("isolates immutable X wallet bindings between devnet and explicitly enabled m
     .where(eq(creatorFeeBindings.xId, "9081"));
   expect(rows.map((r) => r.network).sort()).toEqual(["devnet", "mainnet-beta"]);
   expect(rows.every((r) => r.wallet === "wallet-network-test")).toBe(true);
+});
+
+it("assigns the remainder only to the authenticated creator wallet's connected X identity", async () => {
+  enable();
+  await seed("987601", "creator-remainder-wallet");
+  const result = await resolveCreatorFeeRemainder(
+    "creator-remainder-wallet",
+    [{ xId: "987602", shareBps: 2000, creatorXId: "999999" }],
+    db,
+  );
+  expect(result).toEqual([
+    { xId: "987602", shareBps: 2000 },
+    { xId: "987601", shareBps: 8000 },
+  ]);
+  expect(await resolveCreatorFeeRemainder("unlinked-wallet", [], db)).toEqual(
+    [],
+  );
+  expect(
+    await resolveCreatorFeeRemainder(
+      "unlinked-wallet",
+      [{ xId: "987602", shareBps: 10000 }],
+      db,
+    ),
+  ).toEqual([{ xId: "987602", shareBps: 10000 }]);
+  await expect(
+    resolveCreatorFeeRemainder(
+      "unlinked-wallet",
+      [{ xId: "987602", shareBps: 2000 }],
+      db,
+    ),
+  ).rejects.toThrow("Connect your X account");
+  await expect(
+    resolveCreatorFeeRemainder(
+      "creator-remainder-wallet",
+      [{ xId: "987602", shareBps: 10001 }],
+      db,
+    ),
+  ).rejects.toThrow();
 });

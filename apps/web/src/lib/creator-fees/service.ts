@@ -16,7 +16,7 @@ import {
   sql,
   type Database,
 } from "@oneonly/db";
-import { validateFeeRecipients } from "@oneonly/core";
+import { validateFeeRecipients, completeCreatorFeeShares } from "@oneonly/core";
 import { client, PublicKey, NETWORK } from "@oneonly/protocol";
 import { FeeError, lookupX, verifyXPost, type FeeProfile } from "./provider";
 import { creatorFeeRuntime } from "./runtime";
@@ -89,6 +89,47 @@ export async function findFeeProfile(
     });
   return profile;
 }
+/** Resolve the remainder on the server; never accept a caller-supplied creator ID. */
+export async function resolveCreatorFeeRemainder(
+  wallet: string,
+  input: unknown,
+  database?: Database,
+) {
+  const recipients = validateFeeRecipients(input, false);
+  if (!recipients.length) return [];
+  assertFeeFeature();
+  if (recipients.reduce((sum, row) => sum + row.shareBps, 0) === 10000)
+    return recipients;
+  const db = database ?? (await getDatabase());
+  const [creator] = await db
+    .select()
+    .from(walletProfiles)
+    .where(eq(walletProfiles.wallet, wallet));
+  if (!creator)
+    throw new FeeError(
+      "Connect your X account to this wallet so the remaining creator-fee share can be assigned to you.",
+      409,
+    );
+  const completed = completeCreatorFeeShares(recipients, creator.xId);
+  await db
+    .insert(creatorFeeProfiles)
+    .values({
+      xId: creator.xId,
+      username: creator.xUsername,
+      name: creator.xUsername,
+      avatar: creator.xAvatar,
+    })
+    .onConflictDoUpdate({
+      target: creatorFeeProfiles.xId,
+      set: {
+        username: creator.xUsername,
+        avatar: creator.xAvatar,
+        updatedAt: new Date(),
+      },
+    });
+  return completed;
+}
+
 export async function resolveFeeAllocation(
   input: unknown,
   database?: Database,
