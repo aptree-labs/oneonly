@@ -152,7 +152,7 @@ test("a creator can link X without losing the launch draft or uploading before t
     .getByRole("spinbutton", { name: "Share for @recipient" })
     .fill("20");
   await expect(
-    page.getByText(/Link your X account to this wallet before launching/),
+    page.locator(".cf-editor").getByText("Not connected", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Review launch" }).click();
   await expect(
@@ -181,6 +181,9 @@ test("a creator can link X without losing the launch draft or uploading before t
     page
       .locator(".cf-editor")
       .getByRole("link", { name: "X profile @creator" }),
+  ).toBeVisible();
+  await expect(
+    page.locator(".cf-editor").getByText("Connected", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Review launch" }).click();
   await expect(

@@ -5,20 +5,33 @@ import { LoaderCircle } from "lucide-react";
 import { api, useLaunchpad } from "./provider";
 
 type Profile = { username: string; avatar: string | null };
-export function XAccountButton() {
+export function XAccountButton({
+  showStatus = false,
+}: {
+  showStatus?: boolean;
+}) {
   const app = useLaunchpad();
   const pathname = usePathname();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lookup, setLookup] = useState<"checking" | "ready" | "unavailable">(
+    "checking",
+  );
   useEffect(() => {
     let live = true;
     setProfile(null);
+    setLookup(app.wallet ? "checking" : "ready");
     if (app.wallet)
       api<{ wallet: string | null; profile: Profile | null }>("profile")
         .then((data) => {
-          if (live && data.wallet === app.wallet) setProfile(data.profile);
+          if (live) {
+            if (data.wallet === app.wallet) setProfile(data.profile);
+            setLookup("ready");
+          }
         })
-        .catch(() => {});
+        .catch(() => {
+          if (live) setLookup("unavailable");
+        });
     return () => {
       live = false;
     };
@@ -72,31 +85,29 @@ export function XAccountButton() {
       <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.64 7.584H.47l8.6-9.835L0 1.153h7.594l5.243 6.932 6.064-6.932Zm-1.29 19.49h2.039L6.486 3.24H4.298l13.313 17.403Z" />
     </svg>
   );
-  if (profile)
-    return (
-      <a
-        className="lp-x-account"
-        href={`https://x.com/${profile.username}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label={`X profile @${profile.username}`}
-        title={`@${profile.username} · Linked to your wallet`}
-      >
-        {profile.avatar ? (
-          <img
-            src={profile.avatar}
-            alt=""
-            width="24"
-            height="24"
-            referrerPolicy="no-referrer"
-          />
-        ) : (
-          icon
-        )}
-        <span>@{profile.username}</span>
-      </a>
-    );
-  return (
+  const control = profile ? (
+    <a
+      className="lp-x-account"
+      href={`https://x.com/${profile.username}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`X profile @${profile.username}`}
+      title={`@${profile.username} · Linked to your wallet`}
+    >
+      {profile.avatar ? (
+        <img
+          src={profile.avatar}
+          alt=""
+          width="24"
+          height="24"
+          referrerPolicy="no-referrer"
+        />
+      ) : (
+        icon
+      )}
+      <span>@{profile.username}</span>
+    </a>
+  ) : (
     <button
       type="button"
       className="lp-x-account"
@@ -107,5 +118,21 @@ export function XAccountButton() {
       {busy ? <LoaderCircle size={16} className="lp-spin" /> : icon}
       <span>{busy ? "Connecting…" : "Connect X"}</span>
     </button>
+  );
+  return showStatus ? (
+    <>
+      <span>
+        {profile
+          ? "Connected"
+          : lookup === "checking"
+            ? "Checking…"
+            : lookup === "unavailable"
+              ? "Unable to check"
+              : "Not connected"}
+      </span>
+      {control}
+    </>
+  ) : (
+    control
   );
 }

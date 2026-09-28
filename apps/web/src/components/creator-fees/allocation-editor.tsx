@@ -128,8 +128,7 @@ export function AllocationEditor({
       {open && (
         <div id="creator-fee-editor" className="cf-editor-body">
           <p className="lp-caption">
-            Allocate your creator share to X accounts. Recipients can join
-            later. Any remaining share automatically belongs to you.
+            Share your creator fees. You keep the rest.
           </p>
           {!status?.escrowAvailable && (
             <p className="lp-notice">
@@ -203,22 +202,12 @@ export function AllocationEditor({
             </div>
           ))}
           <div className="cf-allocation-total">
-            <span>Your automatic remaining share</span>
+            <span>Your remaining share</span>
             <strong>{remaining / 100}%</strong>
           </div>
-          <p className="lp-caption">
-            {value.length === 0
-              ? "You keep 100% of creator fees in your creator wallet."
-              : "Your remaining share is assigned to the X account connected to your creator wallet. Any share you assign to that account above is added to it."}
-          </p>
           {value.length > 0 && remaining > 0 && (
-            <div className="lp-notice">
-              <p>
-                Link your X account to this wallet before launching to receive
-                your remaining {remaining / 100}%. Your launch draft is saved
-                while you connect.
-              </p>
-              <XAccountButton />
+            <div className="cf-allocation-total" aria-live="polite">
+              <XAccountButton showStatus />
             </div>
           )}
           <div className="cf-allocation-total">
