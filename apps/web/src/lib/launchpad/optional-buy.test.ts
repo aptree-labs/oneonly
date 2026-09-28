@@ -3,6 +3,7 @@ const mocks = vi.hoisted(() => ({
   createLaunch: vi.fn(),
   prices: vi.fn(),
   conversion: vi.fn(),
+  balance: vi.fn(),
   intents: {} as object,
   values: [] as Record<string, any>[],
 }));
@@ -54,6 +55,7 @@ vi.mock("@oneonly/protocol", async (importOriginal) => ({
   quoteMultiplier: async () => 1,
   createLaunch: mocks.createLaunch,
   connection: () => ({
+    getBalance: mocks.balance,
     getLatestBlockhash: async () => ({
       blockhash: "hash",
       lastValidBlockHeight: 123,
@@ -88,6 +90,7 @@ const input = {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.values.length = 0;
+  mocks.balance.mockResolvedValue(100_000_000);
   mocks.createLaunch.mockResolvedValue({
     transaction: {},
     pool: "pool",
@@ -99,7 +102,7 @@ beforeEach(() => {
 it.each(["SOL", "USDC"])(
   "creates a %s pool without buying, requesting prices, or converting SOL",
   async (quote) => {
-    await launch("owner", { ...input, quote });
+    await launch("11111111111111111111111111111111", { ...input, quote });
     expect(mocks.createLaunch).toHaveBeenCalledWith(
       expect.objectContaining({ quote, amount: 0n }),
     );
@@ -111,13 +114,28 @@ it.each(["SOL", "USDC"])(
 );
 it("preserves the optional $5 minimum and existing atomic first-buy preparation", async () => {
   await expect(
-    launch("owner", { ...input, initialBuy: "0.01" }),
+    launch("11111111111111111111111111111111", {
+      ...input,
+      initialBuy: "0.01",
+    }),
   ).rejects.toThrow("at least $5");
   expect(mocks.createLaunch).not.toHaveBeenCalled();
-  await launch("owner", { ...input, initialBuy: "0.05" });
+  await launch("11111111111111111111111111111111", {
+    ...input,
+    initialBuy: "0.05",
+  });
   expect(mocks.createLaunch).toHaveBeenCalledWith(
     expect.objectContaining({ amount: 50_000_000n }),
   );
   expect(mocks.values[0].details.input).toBe("0.05 SOL");
   expect(mocks.values[0].details).not.toHaveProperty("firstBuy");
+});
+
+it("rejects an unfunded launch before creating a pool or pending intent", async () => {
+  mocks.balance.mockResolvedValue(0);
+  await expect(
+    launch("11111111111111111111111111111111", input),
+  ).rejects.toThrow(/has no .* SOL/);
+  expect(mocks.createLaunch).not.toHaveBeenCalled();
+  expect(mocks.values).toHaveLength(0);
 });

@@ -1,3 +1,4 @@
+import { SendTransactionError } from "@solana/web3.js";
 import {
   prepareLaunchAllocation,
   reconcileLaunchAllocation,
@@ -220,6 +221,11 @@ export async function launch(
   )
     fail(
       `Your first buy must be at least $5 in ${data.quote}, plus network fees.`,
+    );
+  if ((await connection().getBalance(new PublicKey(wallet), "confirmed")) === 0)
+    fail(
+      `This wallet has no ${NETWORK === "mainnet-beta" ? "mainnet" : "devnet"} SOL. Add SOL for creation rent and network fees, then try again.`,
+      400,
     );
   const id = randomUUID(),
     mint = Keypair.generate();
@@ -723,8 +729,17 @@ export async function submit(wallet: string, id: string, wire: string) {
       skipPreflight: false,
       preflightCommitment: "confirmed",
     });
-  } catch {
-    /* Poll the deterministic signature rather than inviting a duplicate purchase. */
+  } catch (error) {
+    // Keep signature recovery: a failed RPC response does not prove the
+    // transaction was never broadcast. Record preflight reasons without
+    // logging signed bytes, wallet secrets, or credential-bearing RPC URLs.
+    console.warn("transaction-broadcast-rejected", {
+      intentId: id,
+      reason:
+        error instanceof SendTransactionError
+          ? error.transactionError.message.slice(0, 300)
+          : "RPC transport failure; checking signature",
+    });
   }
   return { id, status: "submitted", signature, tokenId: intent.tokenId };
 }
