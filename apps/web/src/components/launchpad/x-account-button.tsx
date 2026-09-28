@@ -43,8 +43,18 @@ export function XAccountButton() {
         pathname.match(/^\/app\/token\/([0-9a-f-]{36})\/?$/)?.[1] ?? "";
       const result = await api<{ url: string }>("link-x", {
         tokenId,
-        ...(pathname === "/app/creator-fees" ? { returnTo: pathname } : {}),
+        ...(["/app/creator-fees", "/app/create"].includes(pathname)
+          ? { returnTo: pathname }
+          : {}),
       });
+      if (
+        !window.dispatchEvent(
+          new Event("oneonly:before-x-link", { cancelable: true }),
+        )
+      ) {
+        setBusy(false);
+        return;
+      }
       window.location.assign(result.url);
     } catch (error) {
       app.setNotice((error as Error).message);

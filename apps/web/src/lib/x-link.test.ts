@@ -72,7 +72,7 @@ it("only renders X-hosted profile images", () => {
     expect(safeXAvatar(value)).toBeNull();
 });
 
-it("allows only the signed creator-fees return page", () => {
+it("allows only signed creator-fees and launch return pages", () => {
   vi.stubEnv("X_LINK_SECRET", randomBytes(32).toString("hex"));
   const value = {
     purpose: "request" as const,
@@ -85,7 +85,13 @@ it("allows only the signed creator-fees return page", () => {
   expect(readXLink(signXLink(value), "request").returnTo).toBe(
     "/app/creator-fees",
   );
+  expect(
+    readXLink(signXLink({ ...value, returnTo: "/app/create" }), "request")
+      .returnTo,
+  ).toBe("/app/create");
   for (const returnTo of [
+    "/app/create?next=https://evil.test",
+    "/app/create/../other",
     "https://evil.test",
     "//evil.test",
     "/app/creator-fees?next=evil",

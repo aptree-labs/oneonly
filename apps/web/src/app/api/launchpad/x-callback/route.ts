@@ -11,7 +11,7 @@ import { origin, session } from "@/lib/launchpad/auth";
 export const runtime = "nodejs";
 export async function GET(request: NextRequest) {
   let tokenId = "",
-    returnTo: "/app/creator-fees" | undefined,
+    returnTo: "/app/creator-fees" | "/app/create" | undefined,
     result = "failed",
     ownership: string | undefined;
   try {

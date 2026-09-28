@@ -26,7 +26,11 @@ export async function beginXLink(
   tokenId: string,
   returnTo?: unknown,
 ) {
-  if (returnTo !== undefined && returnTo !== "/app/creator-fees")
+  if (
+    returnTo !== undefined &&
+    returnTo !== "/app/creator-fees" &&
+    returnTo !== "/app/create"
+  )
     return fail("Invalid X link return page.", 400);
   if (!process.env.X_LINK_SECRET)
     return fail("X linking is not available yet.", 503);
@@ -54,7 +58,9 @@ export async function beginXLink(
     nonce,
     wallet,
     tokenId,
-    ...(returnTo === "/app/creator-fees" ? { returnTo } : {}),
+    ...(returnTo === "/app/creator-fees" || returnTo === "/app/create"
+      ? { returnTo }
+      : {}),
     expires: Date.now() + 600_000,
   });
   return {

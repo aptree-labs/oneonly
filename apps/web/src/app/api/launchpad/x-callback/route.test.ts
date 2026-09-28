@@ -32,9 +32,14 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.clearAllMocks();
 });
-function request(nonce: string, browserNonce = nonce) {
+function request(
+  nonce: string,
+  browserNonce = nonce,
+  returnTo?: "/app/create",
+) {
   const ticket = signXLink({
     purpose: "profile",
+    returnTo,
     nonce,
     wallet,
     tokenId: "",
@@ -130,4 +135,13 @@ it("issues session-bound X ownership only after a valid callback", async () => {
     request(randomBytes(32).toString("base64url"), "wrong-nonce"),
   );
   expect(rejected.cookies.get(X_SESSION_COOKIE)).toBeUndefined();
+});
+
+it("returns a verified launch link to the launch form", async () => {
+  const nonce = randomBytes(32).toString("base64url");
+  const response = await GET(request(nonce, nonce, "/app/create"));
+  expect(response.headers.get("location")).toBe(
+    "https://app.oneonly.lol/app/create?x=linked",
+  );
+  expect(state.save).toHaveBeenCalledOnce();
 });

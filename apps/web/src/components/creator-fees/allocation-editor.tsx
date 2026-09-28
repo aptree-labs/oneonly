@@ -9,6 +9,7 @@ import {
 } from "./client";
 import { FeeIdentity } from "./profile";
 import { useLaunchpad } from "../launchpad/provider";
+import { XAccountButton } from "../launchpad/x-account-button";
 import "./creator-fees.css";
 export function AllocationEditor({
   value,
@@ -21,7 +22,10 @@ export function AllocationEditor({
 }) {
   const { status, staging, error: statusError } = useFeeStatus();
   const app = useLaunchpad();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(value.length > 0);
+  useEffect(() => {
+    if (value.length) setOpen(true);
+  }, [value.length]);
   const [search, setSearch] = useState("");
   const [profiles, setProfiles] = useState<FeeProfile[]>([]);
   const [loading, setLoading] = useState(false);
@@ -207,6 +211,16 @@ export function AllocationEditor({
               ? "You keep 100% of creator fees in your creator wallet."
               : "Your remaining share is assigned to the X account connected to your creator wallet. Any share you assign to that account above is added to it."}
           </p>
+          {value.length > 0 && remaining > 0 && (
+            <div className="lp-notice">
+              <p>
+                Link your X account to this wallet before launching to receive
+                your remaining {remaining / 100}%. Your launch draft is saved
+                while you connect.
+              </p>
+              <XAccountButton />
+            </div>
+          )}
           <div className="cf-allocation-total">
             <span>Total creator share</span>
             <strong className={total <= 10000 ? "lp-valid" : ""}>

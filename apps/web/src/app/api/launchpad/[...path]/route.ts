@@ -1,3 +1,4 @@
+import { FeeError } from "@/lib/creator-fees/provider";
 import { loadLeaderboard } from "@/lib/launchpad/leaderboard";
 import { MAX_TOKEN_IMAGE_BYTES } from "@/lib/token-image";
 import { marketUsableUntil, type MarketResults } from "@/lib/market-results";
@@ -638,7 +639,7 @@ async function route(
         { error: error.message },
         { status: 400, headers: { "Cache-Control": "no-store" } },
       );
-    if (error instanceof LaunchError)
+    if (error instanceof LaunchError || error instanceof FeeError)
       return Response.json(
         { error: error.message },
         {

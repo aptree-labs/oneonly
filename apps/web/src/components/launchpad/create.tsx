@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { readCreateDraft, serializeCreateDraft } from "@/lib/create-draft";
 import { AllocationEditor } from "../creator-fees/allocation-editor";
 import type { FeeRecipient } from "../creator-fees/client";
 import { Select } from "./select";
@@ -60,14 +61,101 @@ export function CreateToken({
   const [feeAllocationValid, setFeeAllocationValid] = useState(true);
   const imageSelection = useRef(0);
   useEffect(() => {
+    setXSource("link");
+    setProfileError("");
+  }, [app.wallet]);
+  const restoredDraft = useRef(false);
+  const draftKey = `oneonly:create-draft:${app.network}:${app.staging ? "staging" : "production"}`;
+  useEffect(() => {
+    if (!app.wallet || restoredDraft.current) return;
+    restoredDraft.current = true;
+    try {
+      const draft = readCreateDraft(
+        sessionStorage.getItem(draftKey),
+        app.wallet,
+      );
+      sessionStorage.removeItem(draftKey);
+      if (!draft) return;
+      setTicker(draft.ticker);
+      setName(draft.name);
+      setDescription(draft.description);
+      setWebsite(draft.website);
+      setXUrl(draft.xUrl);
+      setXSource(draft.xSource);
+      setTelegram(draft.telegram);
+      setDiscord(draft.discord);
+      setQuote(draft.quote);
+      setPayment(draft.payment);
+      setInitialBuy(draft.initialBuy);
+      setSlippage(draft.slippage);
+      setImage(draft.image);
+      setIncludeFirstBuy(draft.includeFirstBuy);
+      setFeeRecipients(draft.feeRecipients);
+    } catch {
+      /* A blocked storage API must not prevent starting a new launch. */
+    }
+  }, [app.wallet, draftKey]);
+  useEffect(() => {
+    const save = (event: Event) => {
+      try {
+        if (!app.wallet) throw new Error("Connect your wallet first.");
+        sessionStorage.setItem(
+          draftKey,
+          serializeCreateDraft(
+            {
+              ticker,
+              name,
+              description,
+              website,
+              xUrl,
+              xSource,
+              telegram,
+              discord,
+              quote,
+              payment,
+              initialBuy,
+              slippage,
+              image,
+              includeFirstBuy,
+              feeRecipients,
+            },
+            app.wallet,
+          ),
+        );
+      } catch {
+        event.preventDefault();
+        setError(
+          "Your browser could not save this launch draft. Allow site storage before connecting X so your entries are kept.",
+        );
+      }
+    };
+    window.addEventListener("oneonly:before-x-link", save);
+    return () => window.removeEventListener("oneonly:before-x-link", save);
+  }, [
+    draftKey,
+    app.wallet,
+    ticker,
+    name,
+    description,
+    website,
+    xUrl,
+    xSource,
+    telegram,
+    discord,
+    quote,
+    payment,
+    initialBuy,
+    slippage,
+    image,
+    includeFirstBuy,
+    feeRecipients,
+  ]);
+
+  useEffect(() => {
     api<Config>("config")
       .then(setConfig)
       .catch((e) => setError(e.message));
   }, []);
-  useEffect(() => {
-    setXSource("link");
-    setProfileError("");
-  }, [app.wallet]);
   async function useConnectedX() {
     setProfileBusy(true);
     setProfileError("");
@@ -148,6 +236,19 @@ export function CreateToken({
     setError("");
     try {
       await app.authenticate();
+      if (
+        feeRecipients.length &&
+        feeRecipients.reduce((sum, row) => sum + row.shareBps, 0) < 10000
+      ) {
+        const linked = await api<{
+          wallet: string | null;
+          profile: { username: string } | null;
+        }>("profile");
+        if (linked.wallet !== app.wallet || !linked.profile)
+          throw new Error(
+            "Connect X in Share creator fees to receive your remaining share, then review your launch again. Your draft will be kept.",
+          );
+      }
       if (!image) throw new Error("Choose an image for your token.");
       const uploaded = await api<{ id: string }>("image", {
         data: image.split(",")[1],
