@@ -1,5 +1,5 @@
 import { Data, Effect, Schema } from "effect";
-import { isReservedPlatformTicker } from "./platform-token";
+import { isReservedLaunchTicker } from "./platform-token";
 export const TOKEN_SUPPLY = 1_000_000_000;
 export const TOKEN_DECIMALS = 6;
 export const DAY = 86_400_000;
@@ -205,10 +205,9 @@ export const validateLaunch = (input: unknown) =>
           const ticker = normalizeTicker(data.ticker),
             name = data.name.trim(),
             description = (data.description ?? "").trim();
-          if (isReservedPlatformTicker(ticker))
+          if (isReservedLaunchTicker(ticker))
             throw new LaunchError({
-              message:
-                "ONEONLY, ONLYONE and similar tickers are reserved for the official One Only token.",
+              message: "This ticker is reserved. Choose another.",
               status: 400,
             });
           if (name.length < 1 || new TextEncoder().encode(name).length > 32)

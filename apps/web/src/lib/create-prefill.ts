@@ -1,4 +1,4 @@
-import { isReservedPlatformTicker } from "@oneonly/core";
+import { isReservedLaunchTicker } from "@oneonly/core";
 const pairs = new Set([
   "SOL",
   "USDC",
@@ -19,7 +19,7 @@ export function createPrefill(ticker: string, pair: string) {
 }
 export function createTickerHref(ticker: string, pair: string) {
   const value = createPrefill(ticker, pair);
-  return value.ticker && !isReservedPlatformTicker(value.ticker)
+  return value.ticker && !isReservedLaunchTicker(value.ticker)
     ? `/app/create?${new URLSearchParams(value)}`
     : null;
 }

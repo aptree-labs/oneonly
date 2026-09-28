@@ -48,3 +48,5 @@ export * from "./trade-amount";
 export * from "./platform-token";
 
 export * from "./listing-moderation";
+
+export { isReservedLaunchTicker } from "./platform-token";

@@ -38,6 +38,7 @@ import {
 import {
   normalizeTicker,
   isReservedPlatformTicker,
+  isReservedLaunchTicker,
   PLATFORM_TOKEN_ID,
   LaunchError,
   formatUnits,
@@ -203,12 +204,15 @@ async function handle(request: Request, path: string[]) {
       const ticker = normalizeTicker(
         new URL(request.url).searchParams.get("value") ?? "",
       );
-      if (isReservedPlatformTicker(ticker))
+      if (isReservedLaunchTicker(ticker))
         return response({
           ticker,
           available: false,
           reserved: true,
-          tokenId: NETWORK === "mainnet-beta" ? PLATFORM_TOKEN_ID : undefined,
+          tokenId:
+            NETWORK === "mainnet-beta" && isReservedPlatformTicker(ticker)
+              ? PLATFORM_TOKEN_ID
+              : undefined,
         });
       const [row] = await db
         .select()

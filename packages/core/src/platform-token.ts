@@ -47,3 +47,16 @@ function resemblesReservedBrand(ticker: string, brand: string): boolean {
   }
   return edits + (ticker.length - a) + (brand.length - b) <= 1;
 }
+
+/** Exact moderated ticker names; do not fuzzy-match short names such as X. */
+export function isReservedLaunchTicker(raw: string): boolean {
+  const normalized = raw
+    .trim()
+    .replace(/^\$/, "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  return (
+    ["X", "PHANTOM", "ONEPHANTOM", "FRIENDZY"].includes(normalized) ||
+    isReservedPlatformTicker(raw)
+  );
+}

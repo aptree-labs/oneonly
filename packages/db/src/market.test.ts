@@ -250,17 +250,51 @@ it("USD candles use recorded execution values and omit missing prices", async ()
 });
 
 it("pins the official mainnet mint ahead of sorting before pagination", async () => {
-  const official = { ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: PLATFORM_TOKEN_MINT, pool: "official-pool", ticker: "ONEONLY", activatedAt: new Date("2025-01-01") };
-  const others = Array.from({ length: 25 }, (_, i) => ({ ...tokens[0], id: randomUUID(), network: "mainnet-beta", mint: `other-mainnet-${i}`, pool: `other-pool-${i}`, ticker: `OTHER${i}`, activatedAt: now }));
+  const official = {
+    ...tokens[0],
+    id: randomUUID(),
+    network: "mainnet-beta",
+    mint: PLATFORM_TOKEN_MINT,
+    pool: "official-pool",
+    ticker: "ONEONLY",
+    activatedAt: new Date("2025-01-01"),
+  };
+  const others = Array.from({ length: 25 }, (_, i) => ({
+    ...tokens[0],
+    id: randomUUID(),
+    network: "mainnet-beta",
+    mint: `other-mainnet-${i}`,
+    pool: `other-pool-${i}`,
+    ticker: `OTHER${i}`,
+    activatedAt: now,
+  }));
   await local.db.insert(launchTokens).values([official, ...others]);
-  for (const sort of ["newest", "volume", "market-cap", "recent-buys"] as const) {
-    const first = await marketListings(local.db, { ...options, network: "mainnet-beta", sort });
-    const second = await marketListings(local.db, { ...options, network: "mainnet-beta", sort, page: 1 });
+  for (const sort of [
+    "newest",
+    "volume",
+    "market-cap",
+    "recent-buys",
+  ] as const) {
+    const first = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+    });
+    const second = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+      page: 1,
+    });
     expect(first.tokens[0].id).toBe(official.id);
     expect(first.total).toBe(26);
     expect(second.tokens.some((t) => t.id === official.id)).toBe(false);
   }
-  const search = await marketListings(local.db, { ...options, network: "mainnet-beta", search: "OTHER" });
+  const search = await marketListings(local.db, {
+    ...options,
+    network: "mainnet-beta",
+    search: "OTHER",
+  });
   expect(search.tokens.some((t) => t.id === official.id)).toBe(false);
 });
 
@@ -328,11 +362,21 @@ it("does not turn entirely unpriced trades into zero volume or complete history"
 
 it("does not mark a mixed-price subtotal complete even with fully indexed curve history", async () => {
   await local.db.insert(tokenTrades).values({
-    tokenId: tokens[4].id, signature: "mixed-curve-priced", eventIndex: 0,
-    wallet: "fixture", side: "buy", baseAmount: "1", quoteAmount: "2",
-    priceQuote: "2", volumeUsd: 200, blockTime: new Date(now.getTime() - 1000),
+    tokenId: tokens[4].id,
+    signature: "mixed-curve-priced",
+    eventIndex: 0,
+    wallet: "fixture",
+    side: "buy",
+    baseAmount: "1",
+    quoteAmount: "2",
+    priceQuote: "2",
+    volumeUsd: 200,
+    blockTime: new Date(now.getTime() - 1000),
   });
-  const result = await marketListings(local.db, { ...options, search: tokens[4].mint });
+  const result = await marketListings(local.db, {
+    ...options,
+    search: tokens[4].mint,
+  });
   const row = result.tokens.find((token) => token.id === tokens[4].id)!;
   expect(row.volumeUsd24h).toBe(200);
   expect(row.volumeUnpricedTrades).toBe(1);
@@ -340,19 +384,76 @@ it("does not mark a mixed-price subtotal complete even with fully indexed curve 
 });
 
 it("excludes moderated mainnet tokens from listings, counts and exact searches before pagination", async () => {
-  const hidden = { ...tokens[0], id: HIDDEN_MAINNET_TOKEN_IDS[0], network: "mainnet-beta", ticker: "ONLYONE", name: "Only One", mint: "moderated-mint", pool: "moderated-pool", activatedAt: now };
+  const hidden = {
+    ...tokens[0],
+    id: HIDDEN_MAINNET_TOKEN_IDS[0],
+    network: "mainnet-beta",
+    ticker: "ONLYONE",
+    name: "Only One",
+    mint: "moderated-mint",
+    pool: "moderated-pool",
+    activatedAt: now,
+  };
   await local.db.insert(launchTokens).values(hidden);
-  for (const sort of ["newest", "volume", "market-cap", "recent-buys", "oldest", "relevance"] as const) {
-    const first = await marketListings(local.db, { ...options, network: "mainnet-beta", sort });
-    const second = await marketListings(local.db, { ...options, network: "mainnet-beta", sort, page: 1 });
+  for (const sort of [
+    "newest",
+    "volume",
+    "market-cap",
+    "recent-buys",
+    "oldest",
+    "relevance",
+  ] as const) {
+    const first = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+    });
+    const second = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      sort,
+      page: 1,
+    });
     expect(first.total).toBe(26);
     expect(first.tokens).toHaveLength(24);
     expect(second.tokens).toHaveLength(2);
-    expect([...first.tokens, ...second.tokens].some((t) => t.id === hidden.id)).toBe(false);
+    expect(
+      [...first.tokens, ...second.tokens].some((t) => t.id === hidden.id),
+    ).toBe(false);
   }
   for (const search of [hidden.ticker, hidden.mint]) {
-    const result = await marketListings(local.db, { ...options, network: "mainnet-beta", search });
+    const result = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      search,
+    });
     expect(result.tokens).toEqual([]);
     expect(result.total).toBe(0);
+  }
+});
+
+it("delists every explicitly moderated token without deleting its record", async () => {
+  for (const [index, id] of HIDDEN_MAINNET_TOKEN_IDS.entries()) {
+    if (index === 0) continue;
+    const token = {
+      ...tokens[0],
+      id,
+      network: "mainnet-beta",
+      ticker: `MOD${index}`,
+      mint: `moderated-mint-${index}`,
+      pool: `moderated-pool-${index}`,
+    };
+    await local.db.insert(launchTokens).values(token);
+    const result = await marketListings(local.db, {
+      ...options,
+      network: "mainnet-beta",
+      search: token.mint,
+    });
+    expect(result.tokens).toEqual([]);
+    expect(result.total).toBe(0);
+    const stored = await local.db.select().from(launchTokens);
+    expect(stored.some((row) => row.id === id && row.status === "active")).toBe(
+      true,
+    );
   }
 });
