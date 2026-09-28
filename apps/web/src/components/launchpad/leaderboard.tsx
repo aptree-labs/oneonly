@@ -19,7 +19,7 @@ const periods = [
   { value: "all", label: "All time" },
 ] as const;
 export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
-  const { wallet, network } = useLaunchpad();
+  const { wallet, network, staging } = useLaunchpad();
   const [tab, setTab] = useState<"traders" | "recipients">("traders");
   const [period, setPeriod] = useState<LeaderboardPeriod>("24h");
   const [data, setData] = useState(initial);
@@ -99,7 +99,7 @@ export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
           aria-hidden="true"
         />
       </header>
-      {network === "devnet" && (
+      {staging && (
         <div className="cf-tabs" role="group" aria-label="Leaderboard type">
           <button
             type="button"
@@ -117,7 +117,7 @@ export function Leaderboard({ initial }: { initial?: TraderLeaderboard }) {
           </button>
         </div>
       )}
-      {tab === "recipients" && network === "devnet" ? (
+      {tab === "recipients" && staging ? (
         <RecipientList />
       ) : (
         <>

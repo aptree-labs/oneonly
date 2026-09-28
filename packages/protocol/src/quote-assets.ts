@@ -19,13 +19,23 @@ export const USDC_MINTS = {
 } as const;
 export const QUOTE_MINTS = {
   SOL: "So11111111111111111111111111111111111111112",
-  USDC: USDC_MINTS[solanaNetwork(process.env.SOLANA_NETWORK)],
+  USDC: USDC_MINTS[
+    solanaNetwork(
+      process.env.SOLANA_NETWORK,
+      process.env.ONEONLY_ENVIRONMENT,
+      process.env.STAGING_MAINNET_ENABLED,
+    )
+  ],
 } as const;
 /** Operator-controlled allowlist. A user's launch request can never choose an arbitrary mint or config. */
 export function quoteAssets(
   env: NodeJS.ProcessEnv = process.env,
 ): QuoteAsset[] {
-  const network = solanaNetwork(env.SOLANA_NETWORK);
+  const network = solanaNetwork(
+    env.SOLANA_NETWORK,
+    env.ONEONLY_ENVIRONMENT,
+    env.STAGING_MAINNET_ENABLED,
+  );
   const defaults: QuoteAsset[] = [
     {
       symbol: "SOL",

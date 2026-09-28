@@ -55,3 +55,32 @@ describe("staging isolation", () => {
     ).not.toThrow();
   });
 });
+
+it("allows only explicitly opted-in mainnet staging with isolated storage", () => {
+  const env = {
+    ...staging,
+    SOLANA_NETWORK: "mainnet-beta",
+    STAGING_MAINNET_ENABLED: "true",
+    DATABASE_URL: "postgres://user@db.invalid/oneonly_staging_mainnet",
+  };
+  expect(() => assertStagingEnvironment(env)).not.toThrow();
+  for (const override of [
+    { STAGING_MAINNET_ENABLED: undefined },
+    { STAGING_MAINNET_ENABLED: "false" },
+    { DATABASE_URL: undefined },
+    { DATABASE_URL: staging.DATABASE_URL },
+    { DATABASE_URL: "postgres://user@db.invalid/oneonly_mainnet" },
+    { DATABASE_URL: "postgres://user@db.invalid/oneonly_%6dainnet" },
+    {
+      DATABASE_URL:
+        "postgres://user@db.invalid/oneonly_staging_mainnet?dbname=oneonly_mainnet",
+    },
+    { MAINNET_DATABASE_URL: "postgres://user@db.invalid/oneonly_mainnet" },
+  ])
+    expect(() => assertStagingEnvironment({ ...env, ...override })).toThrow();
+  expect(() =>
+    assertStagingEnvironment({ ...env, SOLANA_NETWORK: "devnet" }),
+  ).toThrow("database");
+  expect(xLinkStartOrigin(env)).toBe(staging.APP_URL);
+  expect(xLinkReturnOrigin(env)).toBe(staging.APP_URL);
+});

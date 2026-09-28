@@ -11,6 +11,7 @@ import {
   xIdHash,
 } from "@oneonly/fee-escrow";
 const mocks = vi.hoisted(() => ({
+  network: "devnet",
   read: vi.fn(),
   record: vi.fn(),
   append: vi.fn(),
@@ -20,6 +21,9 @@ vi.mock("@oneonly/fee-escrow", async (original) => ({
   readAllocation: mocks.read,
 }));
 vi.mock("@oneonly/protocol", async () => ({
+  get NETWORK() {
+    return mocks.network;
+  },
   ...(await import("@solana/web3.js")),
   ...(await import("../../../../../packages/protocol/src/wire")),
   connection: () => ({}),
@@ -58,6 +62,7 @@ const pool = Keypair.generate().publicKey,
   });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.network = "devnet";
   vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
   mocks.read.mockResolvedValue({
     pool,

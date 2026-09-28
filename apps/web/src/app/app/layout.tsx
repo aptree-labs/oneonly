@@ -43,7 +43,11 @@ export default async function Layout({
       ? "light"
       : "dark";
   return (
-    <LaunchpadProvider network={NETWORK} initialTheme={theme}>
+    <LaunchpadProvider
+      network={NETWORK}
+      initialTheme={theme}
+      staging={isStaging()}
+    >
       {children}
     </LaunchpadProvider>
   );

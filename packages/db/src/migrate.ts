@@ -1,7 +1,9 @@
+import { assertStagingDatabase } from "./connection-options";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { migrationsFolder, createLocalDatabase } from "./index";
+assertStagingDatabase(process.env);
 if (process.env.DATABASE_URL) {
   const sql = postgres(process.env.DATABASE_URL, { max: 1 });
   try {

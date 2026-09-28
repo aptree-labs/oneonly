@@ -83,6 +83,7 @@ export async function prepareIntent(
     wallet,
     latest.blockhash,
     signer ? (Array.isArray(signer) ? signer : [signer]) : [],
+    { omitAddedPriorityFeeIfOversize: kind === "creator-fee-claim" },
   );
   const reviewDetails = {
     network: NETWORK,
@@ -375,13 +376,18 @@ export async function trade(wallet: string, input: Record<string, unknown>) {
 export async function claim(wallet: string, id: string, venue = "dbc") {
   await assertNetwork();
   const token = await tokenById(id);
-  if (process.env.ONEONLY_ENVIRONMENT === "staging" && NETWORK === "devnet") {
+  if (process.env.ONEONLY_ENVIRONMENT === "staging") {
     const [shared] = await (
       await getDatabase()
     )
       .select()
       .from(creatorFeePools)
-      .where(eq(creatorFeePools.tokenId, id))
+      .where(
+        and(
+          eq(creatorFeePools.tokenId, id),
+          eq(creatorFeePools.network, NETWORK),
+        ),
+      )
       .limit(1);
     if (shared) fail("Claim your allocated share from Creator fees.", 409);
   }

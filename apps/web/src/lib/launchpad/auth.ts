@@ -18,7 +18,12 @@ import {
   gt,
   sql,
 } from "@oneonly/db";
-import { LaunchError, walletChain } from "@oneonly/core";
+import {
+  LaunchError,
+  walletChain,
+  walletSessionCookieName,
+  deploymentScope,
+} from "@oneonly/core";
 import bs58 from "bs58";
 export const fail = (message: string, status = 400): never => {
   throw new LaunchError({ message, status });
@@ -70,6 +75,12 @@ export function walletAddress(value: unknown) {
 }
 export const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
+export const walletSessionHash = (value: string) =>
+  hash(
+    process.env.ONEONLY_ENVIRONMENT === "staging"
+      ? `oneonly-session:${deploymentScope(NETWORK, "staging")}:${value}`
+      : value,
+  );
 const blocked = new Map<string, number>();
 export async function rateLimit(key: string, maximum = 20) {
   const denial = blocked.get(key);
@@ -121,7 +132,12 @@ export async function rateLimit(key: string, maximum = 20) {
   if (row.count > maximum)
     fail("Too many requests. Try again in a minute.", 429);
 }
-export async function session(cookieName = `oneonly-wallet-${NETWORK}`) {
+export async function session(
+  cookieName = walletSessionCookieName(
+    NETWORK,
+    process.env.ONEONLY_ENVIRONMENT,
+  ),
+) {
   const value = (await cookies()).get(cookieName)?.value;
   if (!value) return null;
   const db = await getDatabase();
@@ -130,7 +146,7 @@ export async function session(cookieName = `oneonly-wallet-${NETWORK}`) {
     .from(walletSessions)
     .where(
       and(
-        eq(walletSessions.hash, hash(value)),
+        eq(walletSessions.hash, walletSessionHash(value)),
         gt(walletSessions.expiresAt, new Date()),
       ),
     )
@@ -185,25 +201,31 @@ export async function verifyChallenge(id: string, signature: string) {
     expiresAt = new Date(Date.now() + 86_400_000);
   await db
     .insert(walletSessions)
-    .values({ hash: hash(token), wallet: row.wallet, expiresAt });
-  (await cookies()).set(`oneonly-wallet-${NETWORK}`, token, {
-    httpOnly: true,
-    secure: origin().startsWith("https:"),
-    sameSite: "strict",
-    path: "/",
-    expires: expiresAt,
-  });
+    .values({ hash: walletSessionHash(token), wallet: row.wallet, expiresAt });
+  (await cookies()).set(
+    walletSessionCookieName(NETWORK, process.env.ONEONLY_ENVIRONMENT),
+    token,
+    {
+      httpOnly: true,
+      secure: origin().startsWith("https:"),
+      sameSite: "strict",
+      path: "/",
+      expires: expiresAt,
+    },
+  );
   return { wallet: row.wallet };
 }
 export async function logout() {
   const jar = await cookies(),
-    token = jar.get(`oneonly-wallet-${NETWORK}`)?.value;
+    token = jar.get(
+      walletSessionCookieName(NETWORK, process.env.ONEONLY_ENVIRONMENT),
+    )?.value;
   if (token)
     await (
       await getDatabase()
     )
       .delete(walletSessions)
-      .where(eq(walletSessions.hash, hash(token)));
-  jar.delete(`oneonly-wallet-${NETWORK}`);
+      .where(eq(walletSessions.hash, walletSessionHash(token)));
+  jar.delete(walletSessionCookieName(NETWORK, process.env.ONEONLY_ENVIRONMENT));
   return { wallet: null };
 }

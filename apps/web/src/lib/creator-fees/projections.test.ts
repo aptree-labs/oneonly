@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, expect, it, vi } from "vitest";
+import { beforeAll, afterAll, beforeEach, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import {
   createLocalDatabase,
@@ -7,6 +7,15 @@ import {
   creatorFeeBalanceSnapshots,
   type Database,
 } from "@oneonly/db";
+const network = vi.hoisted(() => ({ value: "devnet" }));
+vi.mock("@oneonly/protocol", () => ({
+  get NETWORK() {
+    return network.value;
+  },
+}));
+beforeEach(() => {
+  network.value = "devnet";
+});
 vi.mock("./balances", () => ({ readCreatorFeeBalances: vi.fn() }));
 vi.mock("./runtime", () => ({ creatorFeeRuntime: vi.fn() }));
 import { recipientFeeTotals, refreshFeeSnapshot } from "./projections";
@@ -111,4 +120,55 @@ it("preserves last known balances and observation time during a provider outage"
   const [result] = await recipientFeeTotals(["702"], db);
   expect(result.balances?.[0].amountAtomic).toBe("100");
   expect(new Date(result.lastUpdated!).toISOString()).toBe(initial.observedAt);
+});
+it("never mixes mainnet and devnet fee totals for the same X identity", async () => {
+  await db
+    .insert(creatorFeeProfiles)
+    .values({ xId: "9091", username: "networkrecipient", name: "Network" });
+  for (const [chain, amount] of [
+    ["devnet", "12"],
+    ["mainnet-beta", "37"],
+  ]) {
+    const id = randomUUID();
+    await db.insert(creatorFeePools).values({
+      tokenId: id,
+      network: chain,
+      pool: id,
+      mint: "mint",
+      escrow: "escrow",
+      program: "program",
+    });
+    await db.insert(creatorFeeBalanceSnapshots).values({
+      tokenId: id,
+      xId: "9091",
+      balances: [balance("SOL", amount)],
+      observedAt: new Date(),
+    });
+  }
+  expect(
+    (await recipientFeeTotals(["9091"], db))[0].balances?.[0].amountAtomic,
+  ).toBe("12");
+  network.value = "mainnet-beta";
+  expect(
+    (await recipientFeeTotals(["9091"], db))[0].balances?.[0].amountAtomic,
+  ).toBe("37");
+});
+it("refuses to refresh a different network's cached snapshot", async () => {
+  const id = randomUUID();
+  await db
+    .insert(creatorFeePools)
+    .values({
+      tokenId: id,
+      network: "devnet",
+      pool: id,
+      mint: "mint",
+      escrow: "escrow",
+      program: "program",
+    });
+  network.value = "mainnet-beta";
+  vi.mocked(readCreatorFeeBalances).mockClear();
+  await expect(refreshFeeSnapshot(id, "702", db)).rejects.toThrow(
+    "not available on this network",
+  );
+  expect(readCreatorFeeBalances).not.toHaveBeenCalled();
 });

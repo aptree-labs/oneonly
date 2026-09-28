@@ -17,7 +17,7 @@ import {
   type Database,
 } from "@oneonly/db";
 import { validateFeeRecipients } from "@oneonly/core";
-import { client, PublicKey } from "@oneonly/protocol";
+import { client, PublicKey, NETWORK } from "@oneonly/protocol";
 import { FeeError, lookupX, verifyXPost, type FeeProfile } from "./provider";
 import { creatorFeeRuntime } from "./runtime";
 import { readCreatorFeeBalances } from "./balances";
@@ -26,11 +26,13 @@ import { publicCache } from "../cache/public-cache";
 export { FeeError } from "./provider";
 export const feeFeatureEnabled = () =>
   process.env.ONEONLY_ENVIRONMENT === "staging" &&
-  process.env.SOLANA_NETWORK === "devnet";
+  (NETWORK === "devnet" ||
+    (NETWORK === "mainnet-beta" &&
+      process.env.STAGING_MAINNET_ENABLED === "true"));
 export function assertFeeFeature() {
   if (!feeFeatureEnabled())
     throw new FeeError(
-      "Creator fee sharing is available only in the devnet preview.",
+      "Creator fee sharing is available only in the enabled staging environment.",
       404,
     );
 }
@@ -42,6 +44,7 @@ export async function feeStatus() {
   const identity = createHash("sha256")
     .update(
       JSON.stringify([
+        NETWORK,
         process.env.CREATOR_FEE_PROGRAM_ID,
         process.env.CREATOR_FEE_VERIFIER_PUBLIC_KEY,
       ]),
@@ -63,7 +66,7 @@ export async function feeStatus() {
     : false;
   return {
     enabled,
-    network: "devnet",
+    network: NETWORK,
     lookupAvailable: enabled && !!process.env.TWITTERAPI_IO_API_KEY,
     bindingAvailable:
       enabled && !!process.env.X_LINK_SECRET && !!process.env.X_CLIENT_ID,
@@ -105,7 +108,7 @@ export async function resolveFeeAllocation(
 }
 export type RecordedFeeAllocation = {
   tokenId: string;
-  network: "devnet";
+  network: typeof NETWORK;
   pool: string;
   mint: string;
   escrow: string;
@@ -118,7 +121,7 @@ export async function recordFeeAllocation(
   database?: Database,
 ) {
   assertFeeFeature();
-  if (input.network !== "devnet")
+  if (input.network !== NETWORK)
     throw new FeeError("Wrong allocation network.");
   const recipients = validateFeeRecipients(input.recipients);
   if (!recipients.length) throw new FeeError("Recipients are required.");
@@ -177,7 +180,7 @@ export async function bindFeeWallet(wallet: string, database?: Database) {
     .from(creatorFeeBindings)
     .where(
       and(
-        eq(creatorFeeBindings.network, "devnet"),
+        eq(creatorFeeBindings.network, NETWORK),
         eq(creatorFeeBindings.wallet, wallet),
       ),
     );
@@ -218,14 +221,14 @@ export async function bindFeeWallet(wallet: string, database?: Database) {
     .onConflictDoNothing();
   await db
     .insert(creatorFeeBindings)
-    .values({ network: "devnet", wallet, xId: profile.xId })
+    .values({ network: NETWORK, wallet, xId: profile.xId })
     .onConflictDoNothing();
   const [binding] = await db
     .select()
     .from(creatorFeeBindings)
     .where(
       and(
-        eq(creatorFeeBindings.network, "devnet"),
+        eq(creatorFeeBindings.network, NETWORK),
         eq(creatorFeeBindings.xId, profile.xId),
       ),
     );
@@ -242,7 +245,7 @@ async function bindingFor(wallet: string, db: Database) {
     .from(creatorFeeBindings)
     .where(
       and(
-        eq(creatorFeeBindings.network, "devnet"),
+        eq(creatorFeeBindings.network, NETWORK),
         eq(creatorFeeBindings.wallet, wallet),
       ),
     );
@@ -266,7 +269,7 @@ async function allocationsFor(xId: string, db: Database, offset = 0) {
     .innerJoin(launchTokens, eq(launchTokens.id, creatorFeeAllocations.tokenId))
     .where(
       and(
-        eq(creatorFeePools.network, "devnet"),
+        eq(creatorFeePools.network, NETWORK),
         eq(creatorFeeAllocations.xId, xId),
       ),
     )
@@ -407,7 +410,7 @@ export async function feeRecipients(
     )
     .where(
       and(
-        eq(creatorFeePools.network, "devnet"),
+        eq(creatorFeePools.network, NETWORK),
         sql`position(lower(${term}) in lower(${creatorFeeProfiles.username} || ' ' || ${creatorFeeProfiles.name})) > 0`,
       ),
     )
@@ -506,7 +509,7 @@ export async function createFeeChallenge(
     .where(
       and(
         eq(creatorFeePools.tokenId, input.tokenId),
-        eq(creatorFeePools.network, "devnet"),
+        eq(creatorFeePools.network, NETWORK),
       ),
     );
   const [allocation] = await db
@@ -539,7 +542,7 @@ export async function createFeeChallenge(
   const scope = {
     ...input,
     cumulativeAtomic,
-    network: "devnet",
+    network: NETWORK,
     xId: binding.xId,
     wallet,
     bindingVersion: binding.version,
@@ -555,7 +558,7 @@ export async function createFeeChallenge(
     expiresAt,
   };
   await db.insert(creatorFeeChallenges).values(challenge);
-  const postText = `Verifying my OneOnly devnet creator-fee claim.\n${challenge.code}`;
+  const postText = `Verifying my OneOnly ${NETWORK === "mainnet-beta" ? "mainnet" : "devnet"} creator-fee claim.\n${challenge.code}`;
   return {
     id: challenge.id,
     postText,
@@ -578,7 +581,7 @@ export async function verifiedFeeChallenge(
     .where(
       and(
         eq(creatorFeeChallenges.id, id),
-        eq(creatorFeeChallenges.network, "devnet"),
+        eq(creatorFeeChallenges.network, NETWORK),
         eq(creatorFeeChallenges.wallet, wallet),
       ),
     );
@@ -608,7 +611,7 @@ export async function verifyFeeChallenge(
     .where(
       and(
         eq(creatorFeeChallenges.id, id),
-        eq(creatorFeeChallenges.network, "devnet"),
+        eq(creatorFeeChallenges.network, NETWORK),
         eq(creatorFeeChallenges.wallet, wallet),
       ),
     );

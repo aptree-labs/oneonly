@@ -5,7 +5,7 @@ import {
   eq,
   and,
 } from "@oneonly/db";
-import { connection, PublicKey, feeMarket } from "@oneonly/protocol";
+import { connection, PublicKey, feeMarket, NETWORK } from "@oneonly/protocol";
 import {
   allocationAddress,
   readAllocation,
@@ -38,16 +38,14 @@ export async function readCreatorFeeBalances(
     .where(
       and(
         eq(creatorFeePools.tokenId, tokenId),
-        eq(creatorFeePools.network, "devnet"),
+        eq(creatorFeePools.network, NETWORK),
       ),
     )
     .limit(1);
   const [token] = await db
     .select()
     .from(launchTokens)
-    .where(
-      and(eq(launchTokens.id, tokenId), eq(launchTokens.network, "devnet")),
-    )
+    .where(and(eq(launchTokens.id, tokenId), eq(launchTokens.network, NETWORK)))
     .limit(1);
   if (!saved || !token || saved.program !== program.toBase58())
     throw new Error("Fee allocation unavailable");

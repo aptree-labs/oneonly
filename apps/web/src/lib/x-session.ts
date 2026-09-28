@@ -1,6 +1,6 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
-import { solanaNetwork } from "@oneonly/core";
+import { solanaNetwork, walletSessionCookieName } from "@oneonly/core";
 
 export const X_SESSION_COOKIE = "oneonly-x-ownership";
 export const X_SESSION_MAX_AGE = 24 * 60 * 60;
@@ -11,7 +11,14 @@ export const xSessionCookieOptions = {
   maxAge: X_SESSION_MAX_AGE,
 };
 export const walletSessionCookie = () =>
-  `oneonly-wallet-${solanaNetwork(process.env.SOLANA_NETWORK, process.env.ONEONLY_ENVIRONMENT)}`;
+  walletSessionCookieName(
+    solanaNetwork(
+      process.env.SOLANA_NETWORK,
+      process.env.ONEONLY_ENVIRONMENT,
+      process.env.STAGING_MAINNET_ENABLED,
+    ),
+    process.env.ONEONLY_ENVIRONMENT,
+  );
 
 type Identity = { wallet: string; xId: string; verifiedAt: number };
 const digest = (value: string) =>
@@ -20,7 +27,10 @@ const context = () => ({
   network: solanaNetwork(
     process.env.SOLANA_NETWORK,
     process.env.ONEONLY_ENVIRONMENT,
+    process.env.STAGING_MAINNET_ENABLED,
   ),
+  deployment:
+    process.env.ONEONLY_ENVIRONMENT === "staging" ? "staging" : undefined,
   origin: new URL(process.env.LAUNCHPAD_URL || "http://localhost:3000").origin,
 });
 const signature = (payload: string) => {
@@ -69,6 +79,7 @@ export function verifyXSession(
       proof.expires === proof.verifiedAt + X_SESSION_MAX_AGE * 1000 &&
       proof.expires > Date.now() &&
       proof.network === scope.network &&
+      proof.deployment === scope.deployment &&
       proof.origin === scope.origin &&
       proof.sessionHash === digest(walletSession)
     );

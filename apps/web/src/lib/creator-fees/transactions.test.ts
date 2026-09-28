@@ -7,12 +7,14 @@ import {
   it,
   vi,
 } from "vitest";
+import { prepareTransactionWire } from "../../../../../packages/protocol/src/wire";
 import { createPublicKey, randomUUID, verify } from "node:crypto";
 import {
   Keypair,
   PublicKey,
   Transaction,
   Ed25519Program,
+  ComputeBudgetProgram,
 } from "@solana/web3.js";
 import {
   createLocalDatabase,
@@ -27,10 +29,13 @@ import {
   receiptAddress,
   discriminator,
   claimMessage,
+  feeEscrowProgram,
+  feeEscrowClaimDomain,
   xIdHash,
   getAssociatedTokenAddressSync,
 } from "@oneonly/fee-escrow";
 const mock = vi.hoisted(() => ({
+  network: "devnet",
   db: undefined as unknown,
   account: vi.fn(),
   height: vi.fn(),
@@ -45,6 +50,9 @@ vi.mock("@oneonly/db", async (original) => ({
   getDatabase: async () => mock.db,
 }));
 vi.mock("@oneonly/protocol", async () => ({
+  get NETWORK() {
+    return mock.network;
+  },
   ...(await import("@solana/web3.js")),
   connection: () => ({
     getAccountInfo: mock.account,
@@ -83,6 +91,7 @@ afterAll(async () => close());
 afterEach(() => vi.unstubAllEnvs());
 beforeEach(async () => {
   vi.clearAllMocks();
+  mock.network = "devnet";
   const pool = Keypair.generate().publicKey,
     tokenId = randomUUID();
   await db.insert(creatorFeePools).values({
@@ -394,4 +403,75 @@ it("does not reuse an unsubmitted approval from a previous verifier epoch", asyn
   expect(mock.prepare).toHaveBeenCalledOnce();
   expect(mock.prepare.mock.calls[0][4].verifierEpoch).toBe("2");
   expect(result).not.toHaveProperty("transaction", "old-epoch-bytes");
+});
+it("isolates the mainnet pool lookup and signs the mainnet-specific claim domain", async () => {
+  mock.network = "mainnet-beta";
+  const mainnetProgram = feeEscrowProgram("mainnet-beta");
+  mock.runtime.mockResolvedValue({
+    program: mainnetProgram,
+    verifier: signer.publicKey,
+    verifierEpoch: 1n,
+    paused: false,
+  });
+  await expect(prepareCreatorFeeClaim(owner.toBase58(), c.id)).rejects.toThrow(
+    "no shared creator fees",
+  );
+  const [pool] = await db
+    .select()
+    .from(creatorFeePools)
+    .where(eq(creatorFeePools.tokenId, c.tokenId));
+  const scope = {
+    network: "mainnet-beta",
+    program: mainnetProgram.toBase58(),
+    escrow: allocationAddress(
+      new PublicKey(pool.pool),
+      mainnetProgram,
+    ).toBase58(),
+  };
+  await db
+    .update(creatorFeePools)
+    .set(scope)
+    .where(eq(creatorFeePools.tokenId, c.tokenId));
+  await db
+    .update(creatorFeeChallenges)
+    .set(scope)
+    .where(eq(creatorFeeChallenges.id, c.id));
+  c = { ...c, ...scope };
+  mock.verified.mockResolvedValue(c);
+  await prepareCreatorFeeClaim(owner.toBase58(), c.id);
+  const tx = mock.prepare.mock.calls[0][2] as Transaction;
+  const ed = tx.instructions.find((ix) =>
+    ix.programId.equals(Ed25519Program.programId),
+  )!;
+  const offset = ed.data.readUInt16LE(10);
+  expect(
+    ed.data.subarray(
+      offset,
+      offset + feeEscrowClaimDomain("mainnet-beta").length,
+    ),
+  ).toEqual(feeEscrowClaimDomain("mainnet-beta"));
+  expect(
+    tx.instructions.some((ix) => ix.programId.equals(mainnetProgram)),
+  ).toBe(true);
+  const packed = prepareTransactionWire(
+    tx,
+    owner.toBase58(),
+    Keypair.generate().publicKey.toBase58(),
+    [],
+    { omitAddedPriorityFeeIfOversize: true },
+  );
+  const wire = Buffer.from(packed.wire, "base64");
+  expect(wire.length).toBe(1223);
+  const decoded = Transaction.from(wire);
+  const budget = decoded.instructions.filter((ix) =>
+    ix.programId.equals(ComputeBudgetProgram.programId),
+  );
+  expect(budget.map((ix) => ix.data[0])).toEqual([2]);
+  expect(budget[0].data.readUInt32LE(1)).toBe(1_400_000);
+  expect(
+    decoded.instructions.find((ix) =>
+      ix.programId.equals(Ed25519Program.programId),
+    )?.data,
+  ).toEqual(ed.data);
+  expect((await status()).status).toBe("issued");
 });

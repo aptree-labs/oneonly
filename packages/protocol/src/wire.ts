@@ -16,6 +16,7 @@ export function prepareTransactionWire(
   wallet: string,
   blockhash: string,
   signers: Keypair[] = [],
+  options: { omitAddedPriorityFeeIfOversize?: boolean } = {},
 ) {
   if (isLegacyTransaction(tx)) {
     // Unsigned swaps otherwise allow wallet-added priority fees to change the
@@ -28,13 +29,27 @@ export function prepareTransactionWire(
       missing.push(
         ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
       );
-    if (!budget.some((ix) => ix.data[0] === 3))
-      missing.push(
-        ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 }),
-      );
+    const addedPrice = !budget.some((ix) => ix.data[0] === 3)
+      ? ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1000 })
+      : null;
+    if (addedPrice) missing.push(addedPrice);
     tx.instructions.unshift(...missing);
     tx.feePayer = new PublicKey(wallet);
     tx.recentBlockhash = blockhash;
+    if (options.omitAddedPriorityFeeIfOversize && addedPrice) {
+      const message = tx.compileMessage();
+      const signatures = message.header.numRequiredSignatures;
+      // Solana's signature count is shortvec encoded. Include placeholder
+      // signatures when sizing the unsigned wallet request.
+      let signaturePrefixBytes = 1;
+      for (let count = signatures; count >= 128; count >>>= 7)
+        signaturePrefixBytes++;
+      if (
+        message.serialize().length + signaturePrefixBytes + signatures * 64 >
+        1232
+      )
+        tx.instructions = tx.instructions.filter((ix) => ix !== addedPrice);
+    }
     if (signers.length) tx.partialSign(...signers);
   } else {
     if (tx.message.staticAccountKeys[0].toBase58() !== wallet)

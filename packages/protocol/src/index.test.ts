@@ -169,3 +169,21 @@ it("selects Circle mainnet USDC and lists only the five verified, pending stock 
     }),
   ).toThrow();
 });
+
+it("selects mainnet quote assets only after explicit staging network opt-in", () => {
+  const staging = {
+    ONEONLY_ENVIRONMENT: "staging",
+    SOLANA_NETWORK: "mainnet-beta",
+  };
+  expect(() => quoteAssets(staging)).toThrow();
+  const optedIn = quoteAssets({ ...staging, STAGING_MAINNET_ENABLED: "true" });
+  expect(optedIn.find((a) => a.symbol === "USDC")?.mint).toBe(
+    "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+  );
+  expect(
+    quoteAssets({
+      ONEONLY_ENVIRONMENT: "staging",
+      SOLANA_NETWORK: "devnet",
+    }).find((a) => a.symbol === "USDC")?.mint,
+  ).toBe("4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU");
+});

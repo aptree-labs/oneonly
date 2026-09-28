@@ -2,6 +2,7 @@ import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { Keypair } from "@solana/web3.js";
 import {
   FEE_ESCROW_PROGRAM,
+  feeEscrowProgram,
   discriminator,
   controlAddress,
 } from "@oneonly/fee-escrow";
@@ -31,6 +32,7 @@ beforeEach(() => {
   mock.network = "devnet";
   vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
   vi.stubEnv("CREATOR_FEES_ENABLED", "true");
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "false");
   vi.stubEnv("CREATOR_FEE_PROGRAM_ID", FEE_ESCROW_PROGRAM.toBase58());
   vi.stubEnv("CREATOR_FEE_VERIFIER_PUBLIC_KEY", verifier.toBase58());
   vi.stubEnv(
@@ -39,11 +41,15 @@ beforeEach(() => {
   );
   mock.assertNetwork.mockResolvedValue(undefined);
   mock.account.mockImplementation(async (key) =>
-    key.equals(FEE_ESCROW_PROGRAM)
+    key.equals(feeEscrowProgram(mock.network as "devnet" | "mainnet-beta"))
       ? { executable: true }
-      : key.equals(controlAddress())
+      : key.equals(
+            controlAddress(
+              feeEscrowProgram(mock.network as "devnet" | "mainnet-beta"),
+            ),
+          )
         ? {
-            owner: FEE_ESCROW_PROGRAM,
+            owner: feeEscrowProgram(mock.network as "devnet" | "mainnet-beta"),
             data: Buffer.concat([
               discriminator("account", "Control"),
               Buffer.from([1, 0]),
@@ -51,7 +57,7 @@ beforeEach(() => {
             ]),
           }
         : {
-            owner: FEE_ESCROW_PROGRAM,
+            owner: feeEscrowProgram(mock.network as "devnet" | "mainnet-beta"),
             data: Buffer.concat([
               discriminator("account", "Config"),
               verifier.toBuffer(),
@@ -142,4 +148,24 @@ it("fails closed when emergency controls are absent or paused, but permits colle
   });
   await expect(creatorFeeRuntime()).rejects.toThrow("temporarily paused");
   expect((await creatorFeeRuntime({ allowPaused: true })).paused).toBe(true);
+});
+it("enables canonical mainnet only with explicit staging opt-in and matching controls", async () => {
+  mock.network = "mainnet-beta";
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  vi.stubEnv(
+    "CREATOR_FEE_PROGRAM_ID",
+    feeEscrowProgram("mainnet-beta").toBase58(),
+  );
+  expect((await creatorFeeRuntime()).program).toEqual(
+    feeEscrowProgram("mainnet-beta"),
+  );
+  expect(mock.assertNetwork).toHaveBeenCalledOnce();
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  await expect(creatorFeeRuntime()).rejects.toThrow("not enabled");
+});
+it("rejects the devnet program on opted-in mainnet before RPC", async () => {
+  mock.network = "mainnet-beta";
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  await expect(creatorFeeRuntime()).rejects.toThrow("Unsupported");
+  expect(mock.account).not.toHaveBeenCalled();
 });

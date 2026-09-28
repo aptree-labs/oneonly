@@ -67,6 +67,7 @@ export class ProtocolError extends Error {}
 export const NETWORK = solanaNetwork(
   process.env.SOLANA_NETWORK,
   process.env.ONEONLY_ENVIRONMENT,
+  process.env.STAGING_MAINNET_ENABLED,
 );
 export const PROGRAM = new PublicKey(
   "dbcij3LWUppWqq96dh6gJWwBifmcGfLSB5D4DuSMaqN",
@@ -667,4 +668,8 @@ export async function quoteProgram(mint: PublicKey) {
 
 export { verifiedPurchase } from "./purchase";
 
-export { appendFeeAllocation, feeMarket, buildFeeCollection } from "./fee-escrow";
+export {
+  appendFeeAllocation,
+  feeMarket,
+  buildFeeCollection,
+} from "./fee-escrow";

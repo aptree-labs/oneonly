@@ -5,9 +5,10 @@ import {
   tokenTrades,
   creatorFeePools,
   eq,
+  and,
   desc,
 } from "@oneonly/db";
-import { quoteAssets, quoteMultiplier } from "@oneonly/protocol";
+import { quoteAssets, quoteMultiplier, NETWORK } from "@oneonly/protocol";
 import { tokenById } from "./transactions";
 import { refreshSnapshot } from "./indexer";
 import { displayReferences } from "./discovery";
@@ -49,11 +50,16 @@ export async function tokenDetail(id: string, live = false) {
   ]);
   const current = fresh ?? saved[0] ?? null;
   const feePools =
-    process.env.ONEONLY_ENVIRONMENT === "staging" && token.network === "devnet"
+    process.env.ONEONLY_ENVIRONMENT === "staging" && token.network === NETWORK
       ? await db
           .select({ tokenId: creatorFeePools.tokenId })
           .from(creatorFeePools)
-          .where(eq(creatorFeePools.tokenId, id))
+          .where(
+            and(
+              eq(creatorFeePools.tokenId, id),
+              eq(creatorFeePools.network, NETWORK),
+            ),
+          )
           .limit(1)
       : [];
   const value = {

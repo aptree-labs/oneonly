@@ -1,50 +1,40 @@
 # Staging and production releases
 
-## Environments
+| Environment | Git branch | Vercel target                                  | URL                         | Solana network                                                |
+| ----------- | ---------- | ---------------------------------------------- | --------------------------- | ------------------------------------------------------------- |
+| Staging     | `staging`  | `oneonly-app` Preview, branch-scoped variables | https://staging.oneonly.lol | Mainnet, explicitly enabled for real-funds acceptance testing |
+| Production  | `main`     | `oneonly-app` Production                       | https://oneonly.lol         | Mainnet                                                       |
 
-| Environment | Git branch | Vercel project    | URL                         | Solana network          |
-| ----------- | ---------- | ----------------- | --------------------------- | ----------------------- |
-| Staging     | `staging`  | `oneonly-staging` | https://staging.oneonly.lol | Devnet, test funds only |
-| Production  | `main`     | `oneonly-app`     | https://oneonly.lol         | Mainnet                 |
+Staging now tests the deployed mainnet escrow before creator-fee sharing is released in production. The old `oneonly-staging` project is not the release target. Production creator-fee sharing remains disabled by server-side environment checks.
 
-Use staging for development, cofounder demos, and acceptance testing. Promote reviewed changes from `staging` to `main` only after staging checks pass. Do not copy staging environment values into production.
+## Isolation
 
-The staging project has its own free Neon database (`oneonly-staging-db`), cron secret, and devnet pool configurations. It does not use production signup, wallet, token, or transaction records. No production Redis resource is attached; the app uses its existing local cache fallback. If Redis is added later, use a separate resource or the existing environment/project/network namespace.
+Staging keeps `ONEONLY_ENVIRONMENT=staging`. Selecting mainnet additionally requires `STAGING_MAINNET_ENABLED=true`; without that opt-in the staging runtime rejects mainnet. Devnet remains supported for test-funds development.
 
-Staging disables Vercel Web Analytics, sends `noindex` headers and metadata, and displays a persistent test-funds notice. Runtime and build checks reject staging configured for mainnet or the known mainnet database. These guards supplement, rather than replace, separate credentials.
+Mainnet staging uses a separate empty `oneonly_staging_mainnet` database inside the existing staging database service. It never uses `MAINNET_DATABASE_URL` or the production `oneonly_mainnet` database. The devnet database remains intact. Cache keys, wallet cookies, session hashes and X-session proofs have distinct staging/network scopes. Users must sign in again after the network switch. No production sessions or token records are copied.
 
-## Deployment workflow
+The staging catalog is separate from the production catalog. On-chain transactions are real and visible publicly; this is not a private blockchain or a way to undo a token launch. Use clearly identifiable test tickers. The permanent staging banner identifies the mainnet environment and real funds. Analytics and indexing by search engines remain disabled.
 
-1. Work on a feature branch and open a pull request into `staging`.
-2. Run the relevant tests, typecheck, and a Vercel build.
-3. Deploy the `staging` branch to the `oneonly-staging` project. Verify the domain, devnet notice, launch settings, and changed flows using test funds.
-4. After acceptance, open a pull request from `staging` to `main` for production release. Apply reviewed migrations to the correct database before code that depends on them.
-5. Deploy `main` through the `oneonly-app` project and verify production independently.
+## Branch-scoped Preview variables
 
-Automatic Git deployments require the Vercel GitHub App to be authorized for `aptree-labs/oneonly`, then the staging project's production branch set to `staging` and the app project's branch set to `main`. Until that integration is connected, deploy the reviewed branch manually using the matching Vercel project. In the staging project, Vercel's `production` target means the stable staging URL, not Solana mainnet.
+- `ONEONLY_ENVIRONMENT=staging`, `ONEONLY_SURFACE=app`
+- `STAGING_MAINNET_ENABLED=true`, `SOLANA_NETWORK=mainnet-beta`
+- `SOLANA_RPC_URL`: mainnet RPC
+- `APP_URL` and `LAUNCHPAD_URL`: `https://staging.oneonly.lol`
+- `DATABASE_URL`, `DATABASE_URL_UNPOOLED`: isolated `oneonly_staging_mainnet` database; never `MAINNET_DATABASE_URL`
+- `DBC_CONFIG_*`, including Token-2022 overrides, and `ONEONLY_FEE_WALLET`: verified existing mainnet configurations
+- `CREATOR_FEES_ENABLED=true`, the deployed mainnet `CREATOR_FEE_PROGRAM_ID`, and matching `CREATOR_FEE_VERIFIER_PUBLIC_KEY`/`CREATOR_FEE_VERIFIER_SECRET_KEY`
+- Existing staging `X_CLIENT_ID`, `X_CLIENT_SECRET`, `X_LINK_SECRET`, `TWITTERAPI_IO_API_KEY`, and `CRON_SECRET`
 
-Never deploy a dirty working tree containing unrelated work. Use a clean checkout/archive and verify `.vercel/project.json` identifies the intended project. The repository-root `.vercel` link can refer to a different surface.
+The mainnet verifier is separate from devnet. Its claim domain is `oneonly:fee:v2:mainnet-beta`; the SDK rejects a program/network mismatch. Deployment and upgrade authority remains the user's dedicated wallet. The verifier has no upgrade authority.
 
-## Required staging configuration
+## Release and acceptance
 
-- `ONEONLY_ENVIRONMENT=staging`
-- `ONEONLY_SURFACE=app`
-- `SOLANA_NETWORK=devnet`
-- `SOLANA_RPC_URL=https://api.devnet.solana.com` (or a dedicated devnet RPC)
-- `APP_URL=https://staging.oneonly.lol`
-- `LAUNCHPAD_URL=https://staging.oneonly.lol`
-- `DATABASE_URL`: staging Neon database only; never set `MAINNET_DATABASE_URL`
-- `DBC_CONFIG_SOL` and `DBC_CONFIG_USDC`: validated devnet configurations
-- `CRON_SECRET`: separate random staging secret
+1. Merge reviewed code into `staging`, run tests/typecheck/build, and deploy that branch as Preview in `oneonly-app`.
+2. Check the deployment's network, isolated database, X callback and escrow readiness before moving the staging domain.
+3. On staging, connect a mainnet wallet, link X, launch a token allocating creator fees, trade, collect and claim. A claim still requires a fresh one-time X post. Existing posts only test the provider's read API.
+4. Promote to `main` only after acceptance and explicit production release. Do not copy staging database or verifier settings blindly into Production.
 
-The initial devnet configurations use SPL Token. Token-2022 parity requires dedicated Token-2022 devnet configurations before testing that launch path. JUP, MET, stock assets, and mainnet aggregator routes are not available on devnet.
+The compiled mainnet artifact has been tested locally for a successful mainnet-domain claim and rejection of a devnet-domain attestation. These tests do not substitute for the user's real X-post-to-mainnet-payout acceptance test. No test post is published automatically.
 
-For migrations, use the staging database's direct/unpooled URL and the committed Drizzle migration journal. The public devnet RPC and free database can have rate limits and cold starts; this environment is for demos and correctness testing, not a production throughput benchmark.
-
-## X linking and fee-claim verification
-
-Staging OAuth uses its own callback at `https://staging.oneonly.lol/api/auth/x/callback`, with `X_CLIENT_ID`, `X_CLIENT_SECRET`, and a separate `X_LINK_SECRET`. Register that callback in the X developer application before enabling linking. Production continues using its existing callback/broker path.
-
-The creator-fee preview additionally needs `TWITTERAPI_IO_API_KEY`. Store secrets in Vercel, never in Git or chat. Adding these variables does not by itself implement escrow or per-claim post verification.
-
-See [the implemented escrow preview](./x-fee-escrow.md) and [HTTP API](./x-fee-api.md) for the current flow and configuration. The interface and server implementation are deployed on staging. On 26 September 2026, the escrow was deployed and its live Token-2022 launch → DBC claim → graduation → DAMM claim lifecycle passed. Staging has a dedicated verifier and linking secret. Live X lookup, linking and post verification still require the staging X OAuth credentials, callback registration and twitterapi.io key; test attestations are not proof of that integration. The [original plan](./x-fee-sharing-plan.md) records the architecture and rollout criteria.
+Preview deployments do not run Vercel production cron jobs; acceptance testing should use the app's collection and confirmation flows rather than assume a minute-by-minute background scan.

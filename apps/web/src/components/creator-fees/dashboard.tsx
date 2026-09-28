@@ -44,7 +44,7 @@ type Challenge = {
 };
 export function CreatorFees({ recipient }: { recipient?: string }) {
   const app = useLaunchpad();
-  const { status, devnet, error: statusError } = useFeeStatus();
+  const { status, staging, error: statusError } = useFeeStatus();
   const [account, setAccount] = useState<Account | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -174,7 +174,10 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
   return (
     <div className="cf-dashboard">
       <header className="lp-page-heading">
-        <span className="lp-kicker">CREATOR FEES · DEVNET</span>
+        <span className="lp-kicker">
+          CREATOR FEES ·{" "}
+          {app.network === "devnet" ? "DEVNET" : "MAINNET STAGING"}
+        </span>
         <h1>
           Your share.
           <br />
@@ -182,7 +185,7 @@ export function CreatorFees({ recipient }: { recipient?: string }) {
         </h1>
         <p>Fees allocated to an X account, ready for its owner to claim.</p>
       </header>
-      {!devnet ? (
+      {!staging ? (
         <p className="lp-notice">
           Creator fee sharing is available on staging only.
         </p>

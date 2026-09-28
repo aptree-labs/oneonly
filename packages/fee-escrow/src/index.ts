@@ -17,7 +17,41 @@ import {
 export const FEE_ESCROW_PROGRAM = new PublicKey(
   "BJk7HqbLecWFBFxFTULnmpSwmViLg9FeRLBajewvJ3g4",
 );
-export const CLAIM_DOMAIN = Buffer.from("oneonly:fee:v2:devnet");
+export type FeeEscrowNetwork = "devnet" | "mainnet-beta";
+export const MAINNET_FEE_ESCROW_PROGRAM = new PublicKey(
+  "Atj2sFM2pWUyc7HZafCkxX29vZHJevwSHfPik4R5k6ri",
+);
+export function feeEscrowProgram(network: FeeEscrowNetwork): PublicKey {
+  if (network === "devnet") return FEE_ESCROW_PROGRAM;
+  if (network === "mainnet-beta") return MAINNET_FEE_ESCROW_PROGRAM;
+  throw new Error("Unsupported fee escrow network");
+}
+export function feeEscrowClaimDomain(network: FeeEscrowNetwork): Buffer {
+  feeEscrowProgram(network);
+  return Buffer.from(`oneonly:fee:v2:${network}`);
+}
+/** Application integration pins a reviewed deployment, never an arbitrary environment address. */
+export function assertFeeEscrowProgram(
+  network: FeeEscrowNetwork,
+  program: PublicKey,
+): void {
+  if (!feeEscrowProgram(network).equals(program))
+    throw new Error("Fee escrow program does not match the selected network");
+}
+export const CLAIM_DOMAIN = feeEscrowClaimDomain("devnet");
+function claimNetwork(
+  program: PublicKey,
+  network?: FeeEscrowNetwork,
+): FeeEscrowNetwork {
+  const selected =
+    network ??
+    (program.equals(MAINNET_FEE_ESCROW_PROGRAM) ? "mainnet-beta" : "devnet");
+  if (selected === "mainnet-beta") assertFeeEscrowProgram(selected, program);
+  else if (selected !== "devnet" || program.equals(MAINNET_FEE_ESCROW_PROGRAM))
+    throw new Error("Fee escrow program does not match the selected network");
+  // Disposable devnet program IDs remain usable by isolated local rehearsals.
+  return selected;
+}
 export const xIdHash = (id: string) => {
   if (!/^[1-9][0-9]{0,24}$/.test(id)) throw new Error("Invalid X identity");
   return createHash("sha256").update(`oneonly:x-id:v1:${id}`).digest();
@@ -285,10 +319,11 @@ export function claimMessage(
   wallet: PublicKey,
   destination: PublicKey,
   program = FEE_ESCROW_PROGRAM,
+  network?: FeeEscrowNetwork,
 ) {
   claimArgs(args);
   return Buffer.concat([
-    CLAIM_DOMAIN,
+    feeEscrowClaimDomain(claimNetwork(program, network)),
     program.toBuffer(),
     allocation.toBuffer(),
     mint.toBuffer(),
@@ -312,8 +347,9 @@ export function claimInstructions(args: {
   verifier: PublicKey;
   signature: Uint8Array;
   program?: PublicKey;
+  network?: FeeEscrowNetwork;
 }) {
-  const program = args.program ?? FEE_ESCROW_PROGRAM,
+  const program = args.program ?? feeEscrowProgram(args.network ?? "devnet"),
     a = allocationAddress(args.pool, program),
     ledger = ledgerAddress(a, args.mint, program),
     destination = getAssociatedTokenAddressSync(
@@ -329,6 +365,7 @@ export function claimInstructions(args: {
     args.wallet,
     destination,
     program,
+    args.network,
   );
   return [
     Ed25519Program.createInstructionWithPublicKey({

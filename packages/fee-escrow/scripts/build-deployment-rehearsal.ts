@@ -16,17 +16,32 @@ import { savePrivateJson } from "./deployment-console";
 import {
   reviewedSourceFiles,
   reviewedSourceHash,
-  substituteProgram,
-  validateRehearsalReceipt,
-  type RehearsalReceipt,
+  substituteReleaseSource,
+  CLAIM_DOMAINS,
+  validateBuildReceipt,
+  type BuildReceipt,
 } from "../src/rehearsal";
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const root = resolve(packageDirectory, "../..");
-if (process.argv.length !== 4 || process.argv[2] !== "--out-dir")
-  throw new Error(
-    "Usage: build-deployment-rehearsal.ts --out-dir .local/fee-escrow/rehearsal-src",
-  );
-const output = resolve(process.argv[3]!);
+const options = new Map<string, string>();
+for (let i = 2; i < process.argv.length; i += 2) {
+  const name = process.argv[i],
+    value = process.argv[i + 1];
+  if (
+    !["--out-dir", "--network"].includes(name!) ||
+    !value ||
+    options.has(name!)
+  )
+    throw new Error(
+      "Usage: build-deployment-rehearsal.ts --out-dir PRIVATE_DIRECTORY [--network devnet|mainnet-beta]",
+    );
+  options.set(name!, value);
+}
+const network = options.get("--network") ?? "devnet";
+if (network !== "devnet" && network !== "mainnet-beta")
+  throw new Error("Unsupported isolated build network");
+if (!options.has("--out-dir")) throw new Error("Missing --out-dir");
+const output = resolve(options.get("--out-dir")!);
 if (
   output === packageDirectory ||
   !output.startsWith(join(root, ".local/fee-escrow") + "/")
@@ -71,9 +86,10 @@ for (const path of expectedSources) {
   let contents = readFileSync(join(packageDirectory, path));
   if (path === "program/src/lib.rs")
     contents = Buffer.from(
-      substituteProgram(
+      substituteReleaseSource(
         contents.toString("utf8"),
         program.publicKey.toBase58(),
+        network,
       ),
     );
   const target = join(sourceDirectory, path);
@@ -82,7 +98,9 @@ for (const path of expectedSources) {
 }
 const artifactDirectory = join(output, "build");
 mkdirSync(artifactDirectory, { recursive: true, mode: 0o700 });
-console.log("Building isolated devnet artifact. No transactions will be sent.");
+console.log(
+  `Building isolated ${network} artifact. No transactions will be sent.`,
+);
 execFileSync(
   "cargo-build-sbf",
   [
@@ -106,9 +124,9 @@ if (reviewedSourceHash(packageDirectory) !== sourceHash)
     "Reviewed source changed during build; rebuild before approving",
   );
 const artifact = readFileSync(join(artifactDirectory, "oneonly_fee_escrow.so"));
-const receipt: RehearsalReceipt = {
+const receipt: BuildReceipt = {
   version: 1,
-  network: "devnet",
+  network,
   program: program.publicKey.toBase58(),
   artifactSha256: createHash("sha256").update(artifact).digest("hex"),
   sourceSha256: sourceHash,
@@ -117,19 +135,20 @@ const receipt: RehearsalReceipt = {
     cwd: root,
     encoding: "utf8",
   }).trim(),
-  claimDomain: "oneonly:fee:v2:devnet",
+  claimDomain: CLAIM_DOMAINS[network],
 };
-validateRehearsalReceipt(
+validateBuildReceipt(
   receipt,
   artifact,
   program.publicKey,
   packageDirectory,
+  network,
 );
 savePrivateJson(join(output, "build-receipt.json"), receipt);
 console.log(
   JSON.stringify(
     {
-      network: "devnet",
+      network,
       artifactSha256: receipt.artifactSha256,
       sourceSha256: receipt.sourceSha256,
       receiptPath: join(output, "build-receipt.json"),

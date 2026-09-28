@@ -10,6 +10,7 @@ import {
   sql,
 } from "@oneonly/db";
 import {
+  NETWORK,
   connection,
   PublicKey,
   Keypair,
@@ -40,7 +41,7 @@ async function feePool(tokenId: string) {
     .where(
       and(
         eq(creatorFeePools.tokenId, tokenId),
-        eq(creatorFeePools.network, "devnet"),
+        eq(creatorFeePools.network, NETWORK),
       ),
     )
     .limit(1);
@@ -74,6 +75,8 @@ export async function prepareCreatorFeeClaim(
     c = await verifiedFeeChallenge(wallet, challengeId),
     pool = await feePool(c.tokenId);
   if (
+    c.network !== NETWORK ||
+    pool.program !== program.toBase58() ||
     c.program !== program.toBase58() ||
     c.escrow !== allocationAddress(new PublicKey(pool.pool), program).toBase58()
   )
@@ -97,7 +100,7 @@ export async function prepareCreatorFeeClaim(
     .where(
       and(
         eq(transactionIntents.wallet, wallet),
-        eq(transactionIntents.network, "devnet"),
+        eq(transactionIntents.network, NETWORK),
         eq(transactionIntents.kind, "creator-fee-claim"),
         sql`${transactionIntents.details}->>'challengeId' = ${challengeId}`,
       ),
@@ -178,6 +181,7 @@ export async function prepareCreatorFeeClaim(
     owner,
     destination,
     program,
+    NETWORK,
   );
   const privateKey = createPrivateKey({
     key: Buffer.concat([
@@ -198,6 +202,7 @@ export async function prepareCreatorFeeClaim(
       verifier,
       signature,
       program,
+      network: NETWORK,
     }),
   );
   const result = await prepareIntent(
@@ -242,7 +247,7 @@ export async function reconcileCreatorFeeClaim(
       and(
         eq(creatorFeeChallenges.id, challengeId),
         eq(creatorFeeChallenges.wallet, wallet),
-        eq(creatorFeeChallenges.network, "devnet"),
+        eq(creatorFeeChallenges.network, NETWORK),
       ),
     )
     .limit(1);
@@ -255,6 +260,7 @@ export async function reconcileCreatorFeeClaim(
   if (!account) return { confirmed: false };
   const receipt = decodeReceipt(account, program);
   if (
+    c.network !== NETWORK ||
     c.program !== program.toBase58() ||
     receipt.allocation.toBase58() !== c.escrow ||
     receipt.wallet.toBase58() !== wallet ||

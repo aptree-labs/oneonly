@@ -5,6 +5,7 @@ import {
 } from "@oneonly/fee-escrow";
 import {
   PublicKey,
+  NETWORK,
   connection,
   appendFeeAllocation,
   prepareTransactionWire,
@@ -60,8 +61,10 @@ export async function reconcileLaunchAllocation(
 ) {
   if (!encoded) return wallet;
   if (
-    token.network !== "devnet" ||
-    process.env.ONEONLY_ENVIRONMENT !== "staging"
+    token.network !== NETWORK ||
+    process.env.ONEONLY_ENVIRONMENT !== "staging" ||
+    (NETWORK === "mainnet-beta" &&
+      process.env.STAGING_MAINNET_ENABLED !== "true")
   )
     throw new Error("Unsupported shared fee launch environment");
   const saved = JSON.parse(encoded),
@@ -91,7 +94,7 @@ export async function reconcileLaunchAllocation(
     throw new Error("Confirmed fee allocation does not match launch");
   await recordFeeAllocation({
     tokenId: token.id,
-    network: "devnet",
+    network: NETWORK,
     pool: token.pool,
     mint: token.mint,
     escrow: escrow.toBase58(),

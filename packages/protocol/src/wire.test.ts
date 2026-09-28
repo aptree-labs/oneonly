@@ -453,3 +453,83 @@ it.each([1, 4])("accepts bounded wallet compute budget opcode %s", (opcode) => {
     validateWalletFeeChange(original.wire, tx.serialize().toString("base64")),
   ).toThrow();
 });
+it("only drops its own optional priority price when an opted-in transaction exceeds the packet limit", () => {
+  const payer = Keypair.generate();
+  const blockhash = Keypair.generate().publicKey.toBase58();
+  const programId = Keypair.generate().publicKey;
+  const make = (size: number, explicitPrice = false) =>
+    new Transaction().add(
+      ...(explicitPrice
+        ? [ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 2222 })]
+        : []),
+      new TransactionInstruction({
+        programId,
+        keys: [],
+        data: Buffer.alloc(size, 7),
+      }),
+    );
+  // Pick the largest payload that fits when both ordinary budget instructions
+  // are present, then grow it by one byte to exercise the exact boundary.
+  let boundary = 0;
+  for (let size = 900; size < 1150; size++) {
+    try {
+      prepareTransactionWire(make(size), payer.publicKey.toBase58(), blockhash);
+      boundary = size;
+    } catch {
+      break;
+    }
+  }
+  expect(boundary).toBeGreaterThan(900);
+  expect(() =>
+    prepareTransactionWire(
+      make(boundary + 1),
+      payer.publicKey.toBase58(),
+      blockhash,
+    ),
+  ).toThrow();
+  const packed = prepareTransactionWire(
+    make(boundary + 1),
+    payer.publicKey.toBase58(),
+    blockhash,
+    [],
+    { omitAddedPriorityFeeIfOversize: true },
+  );
+  expect(Buffer.byteLength(packed.wire, "base64")).toBeLessThanOrEqual(1232);
+  const tx = Transaction.from(Buffer.from(packed.wire, "base64"));
+  const budgets = tx.instructions.filter((ix) =>
+    ix.programId.equals(ComputeBudgetProgram.programId),
+  );
+  expect(budgets.map((ix) => ix.data[0])).toEqual([2]);
+  expect(budgets[0].data.readUInt32LE(1)).toBe(1_400_000);
+  expect(
+    tx.instructions.find((ix) => ix.programId.equals(programId))?.data,
+  ).toEqual(Buffer.alloc(boundary + 1, 7));
+  // Explicit caller fee instructions are immutable, even in the compact mode.
+  const explicit = make(boundary + 1, true);
+  expect(() =>
+    prepareTransactionWire(
+      explicit,
+      payer.publicKey.toBase58(),
+      blockhash,
+      [],
+      { omitAddedPriorityFeeIfOversize: true },
+    ),
+  ).toThrow();
+  expect(
+    explicit.instructions
+      .find(
+        (ix) =>
+          ix.programId.equals(ComputeBudgetProgram.programId) &&
+          ix.data[0] === 3,
+      )
+      ?.data.readBigUInt64LE(1),
+  ).toBe(2222n);
+  const small = prepareTransactionWire(
+    make(10),
+    payer.publicKey.toBase58(),
+    blockhash,
+    [],
+    { omitAddedPriorityFeeIfOversize: true },
+  );
+  expect(small.priorityFeeLamports).toBe(1400n);
+});

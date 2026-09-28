@@ -50,11 +50,11 @@ export async function feeApi<T>(
   return result as T;
 }
 export function useFeeStatus() {
-  const { network } = useLaunchpad();
+  const { network, staging = false } = useLaunchpad();
   const [status, setStatus] = useState<FeeStatus | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
-    if (network !== "devnet") return;
+    if (!staging) return;
     const controller = new AbortController();
     feeApi<FeeStatus>("status", undefined, controller.signal)
       .then(setStatus)
@@ -62,10 +62,11 @@ export function useFeeStatus() {
         if (!controller.signal.aborted) setError(error.message);
       });
     return () => controller.abort();
-  }, [network]);
+  }, [network, staging]);
   return {
-    status: network === "devnet" ? status : null,
+    status: staging ? status : null,
     error,
-    devnet: network === "devnet",
+    staging,
+    network,
   };
 }

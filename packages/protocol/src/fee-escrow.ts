@@ -1,6 +1,8 @@
 import { deriveDammV1MigrationMetadataAddress } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import {
   allocationAddress,
+  assertFeeEscrowProgram,
+  MAINNET_FEE_ESCROW_PROGRAM,
   collectFeesInstruction,
   initializeAllocationInstruction,
 } from "@oneonly/fee-escrow";
@@ -21,6 +23,22 @@ import {
   ProtocolError,
 } from "./index";
 import type { Transaction, TransactionInstruction } from "@solana/web3.js";
+function assertFeeSharingNetwork(program: PublicKey) {
+  if (NETWORK === "mainnet-beta") {
+    if (
+      process.env.ONEONLY_ENVIRONMENT !== "staging" ||
+      process.env.STAGING_MAINNET_ENABLED !== "true"
+    )
+      throw new ProtocolError(
+        "Mainnet fee sharing is only available in explicitly enabled staging.",
+      );
+    assertFeeEscrowProgram(NETWORK, program);
+  } else if (program.equals(MAINNET_FEE_ESCROW_PROGRAM)) {
+    throw new ProtocolError(
+      "Fee escrow program does not match the selected network.",
+    );
+  }
+}
 export async function appendFeeAllocation(
   transaction: Transaction,
   args: {
@@ -33,8 +51,7 @@ export async function appendFeeAllocation(
     recipients: { xId: string; shareBps: number }[];
   },
 ) {
-  if (NETWORK !== "devnet")
-    throw new ProtocolError("Fee sharing is in devnet preview.");
+  assertFeeSharingNetwork(args.program);
   const pool = new PublicKey(args.pool),
     payer = new PublicKey(args.wallet),
     allocation = allocationAddress(pool, args.program);
@@ -71,6 +88,7 @@ export async function appendFeeAllocation(
   return allocation;
 }
 export async function feeMarket(pool: string, program: PublicKey) {
+  assertFeeSharingNetwork(program);
   const market = await tradingPool(pool),
     allocation = allocationAddress(new PublicKey(pool), program);
   if (!market.virtual.poolState.creator.equals(allocation))

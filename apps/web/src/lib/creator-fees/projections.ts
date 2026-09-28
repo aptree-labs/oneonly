@@ -1,3 +1,4 @@
+import { NETWORK } from "@oneonly/protocol";
 import {
   getDatabase,
   creatorFeeProfiles,
@@ -13,12 +14,27 @@ import {
 import { publicCache } from "../cache/public-cache";
 import { readCreatorFeeBalances } from "./balances";
 import { creatorFeeRuntime } from "./runtime";
+async function requireNetworkPool(db: Database, tokenId: string) {
+  const [pool] = await db
+    .select({ tokenId: creatorFeePools.tokenId })
+    .from(creatorFeePools)
+    .where(
+      and(
+        eq(creatorFeePools.tokenId, tokenId),
+        eq(creatorFeePools.network, NETWORK),
+      ),
+    )
+    .limit(1);
+  if (!pool)
+    throw new Error("Creator fee pool is not available on this network.");
+}
 export async function refreshFeeSnapshot(
   tokenId: string,
   xId: string,
   database?: Database,
 ) {
   const db = database ?? (await getDatabase());
+  await requireNetworkPool(db, tokenId);
   try {
     const balances = await readCreatorFeeBalances(tokenId, xId),
       observedAt = new Date();
@@ -49,10 +65,11 @@ export async function refreshFeeSnapshot(
 }
 export async function cachedFeeBalances(tokenId: string, xId: string) {
   return publicCache(
-    `creator-fees:balances:v1:${process.env.CREATOR_FEE_PROGRAM_ID}:${tokenId}:${xId}`,
+    `creator-fees:balances:v1:${NETWORK}:${process.env.CREATOR_FEE_PROGRAM_ID}:${tokenId}:${xId}`,
     { fresh: 15, stale: 15 },
     async () => {
       const db = await getDatabase();
+      await requireNetworkPool(db, tokenId);
       const [known] = await db
         .select()
         .from(creatorFeeBalanceSnapshots)
@@ -74,7 +91,7 @@ export async function cachedFeeBalances(tokenId: string, xId: string) {
 /** One shared refresh budget across all recipient-page requests. */
 export async function warmFeeSnapshots() {
   return publicCache(
-    `creator-fees:snapshot-sweep:v1:${process.env.CREATOR_FEE_PROGRAM_ID}`,
+    `creator-fees:snapshot-sweep:v1:${NETWORK}:${process.env.CREATOR_FEE_PROGRAM_ID}`,
     { fresh: 15, stale: 0 },
     async () => {
       await creatorFeeRuntime();
@@ -101,7 +118,7 @@ export async function warmFeeSnapshots() {
         )
         .where(
           and(
-            eq(creatorFeePools.network, "devnet"),
+            eq(creatorFeePools.network, NETWORK),
             eq(creatorFeePools.program, process.env.CREATOR_FEE_PROGRAM_ID!),
             sql`coalesce(${creatorFeeBalanceSnapshots.attemptedAt},'1970-01-01'::timestamptz) < now() - interval '15 seconds'`,
           ),
@@ -132,14 +149,14 @@ export async function recipientFeeTotals(xIds: string[], database?: Database) {
   return db
     .select({
       xId: creatorFeeProfiles.xId,
-      observedTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network='devnet' and s.observed_at is not null)`,
-      freshTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network='devnet' and s.observed_at > now() - interval '2 minutes')`,
+      observedTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at is not null)`,
+      freshTokens: sql<number>`(select count(*)::int from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at > now() - interval '2 minutes')`,
       lastUpdated: sql<
         string | null
-      >`(select min(s.observed_at) from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network='devnet')`,
+      >`(select min(s.observed_at) from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK})`,
       balances: sql<
         RecipientAssetTotal[] | null
-      >`(select jsonb_agg(asset) from (select e->>'mint' as mint,e->>'symbol' as symbol,(e->>'decimals')::int as decimals,sum((e->>'amountAtomic')::numeric)::text as "amountAtomic",sum((e->>'pendingAtomic')::numeric)::text as "pendingAtomic" from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id cross join lateral jsonb_array_elements(s.balances) e where s.x_id=creator_fee_profiles.x_id and p.network='devnet' and s.observed_at is not null group by e->>'mint',e->>'symbol',e->>'decimals' order by e->>'mint') asset)`,
+      >`(select jsonb_agg(asset) from (select e->>'mint' as mint,e->>'symbol' as symbol,(e->>'decimals')::int as decimals,sum((e->>'amountAtomic')::numeric)::text as "amountAtomic",sum((e->>'pendingAtomic')::numeric)::text as "pendingAtomic" from creator_fee_balance_snapshots s join creator_fee_pools p on p.token_id=s.token_id cross join lateral jsonb_array_elements(s.balances) e where s.x_id=creator_fee_profiles.x_id and p.network=${NETWORK} and s.observed_at is not null group by e->>'mint',e->>'symbol',e->>'decimals' order by e->>'mint') asset)`,
     })
     .from(creatorFeeProfiles)
     .where(inArray(creatorFeeProfiles.xId, xIds));

@@ -121,6 +121,7 @@ export type Theme = "dark" | "light";
 type AppContext = {
   theme: Theme;
   network: SolanaNetwork;
+  staging?: boolean;
   explorer: (kind: "tx" | "address", value: string) => string;
   authenticate: () => Promise<string>;
   review: (intent: Intent) => void;
@@ -141,9 +142,11 @@ function Shell({
   children,
   network,
   initialTheme,
+  staging = false,
 }: {
   children: ReactNode;
   network: SolanaNetwork;
+  staging?: boolean;
   initialTheme: Theme;
 }) {
   const [theme, setTheme] = useState<Theme>(initialTheme);
@@ -411,7 +414,7 @@ function Shell({
     { href: "/app/create", label: "Launch a token", Icon: Rocket },
     { href: "/app/portfolio", label: "Your wallet", Icon: Wallet },
     { href: "/app/leaderboard", label: "Leaderboard", Icon: Trophy },
-    ...(network === "devnet"
+    ...(staging
       ? [{ href: "/app/creator-fees", label: "Creator fees", Icon: Coins }]
       : []),
     { href: "/app/office", label: "Retard Office", Icon: Building2 },
@@ -421,6 +424,7 @@ function Shell({
     <Context.Provider
       value={{
         theme,
+        staging,
         authenticate,
         transactionRevision,
         lastConfirmedTrade,
@@ -503,11 +507,15 @@ function Shell({
           </nav>
         </aside>
         <div className="lp-workspace">
-          {network === "devnet" && (
+          {(network === "devnet" || staging) && (
             <div className="lp-devnet-banner" role="note">
-              <strong>Devnet preview</strong>
+              <strong>
+                {network === "devnet" ? "Devnet preview" : "Mainnet staging"}
+              </strong>
               <span>
-                Test funds only. Tokens and balances have no real value.
+                {network === "devnet"
+                  ? "Test funds only. Tokens and balances have no real value."
+                  : "Testing environment · Real SOL and tokens. Transactions are on mainnet."}
               </span>
             </div>
           )}
@@ -897,9 +905,11 @@ export function LaunchpadProvider({
   children,
   network,
   initialTheme,
+  staging = false,
 }: {
   children: ReactNode;
   network: SolanaNetwork;
+  staging?: boolean;
   initialTheme: Theme;
 }) {
   const wallets = useMemo(() => [], []);
@@ -907,7 +917,11 @@ export function LaunchpadProvider({
     <ConnectionProvider endpoint={publicRpc(network)}>
       <WalletProvider wallets={wallets} autoConnect>
         <WalletModalProvider>
-          <Shell network={network} initialTheme={initialTheme}>
+          <Shell
+            network={network}
+            initialTheme={initialTheme}
+            staging={staging}
+          >
             {children}
           </Shell>
         </WalletModalProvider>

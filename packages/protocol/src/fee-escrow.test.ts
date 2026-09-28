@@ -12,7 +12,11 @@ import {
 } from "@meteora-ag/dynamic-bonding-curve-sdk";
 import { CpAmm, CP_AMM_PROGRAM_ID } from "@meteora-ag/cp-amm-sdk";
 import BN from "bn.js";
-import { allocationAddress, discriminator } from "@oneonly/fee-escrow";
+import {
+  allocationAddress,
+  discriminator,
+  MAINNET_FEE_ESCROW_PROGRAM,
+} from "@oneonly/fee-escrow";
 const mock = vi.hoisted(() => ({
   network: "devnet",
   rpc: undefined as unknown,
@@ -81,7 +85,10 @@ beforeEach(() => {
   mock.dbc = dbc;
   mock.damm = damm;
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 function market(quote: PublicKey, graduated = false) {
   const virtual = {
     poolState: {
@@ -307,7 +314,7 @@ function checkCollection(
     ix.keys.map((k) => ({ ...k, isSigner: false })),
   );
 }
-it("refuses allocation initialization on mainnet", async () => {
+it("refuses allocation initialization on mainnet without staging opt-in", async () => {
   mock.network = "mainnet-beta";
   await expect(
     appendFeeAllocation(new Transaction(), {
@@ -319,7 +326,7 @@ it("refuses allocation initialization on mainnet", async () => {
       program,
       recipients: [{ xId: "12345", shareBps: 10000 }],
     }),
-  ).rejects.toThrow("devnet preview");
+  ).rejects.toThrow("explicitly enabled staging");
   expect(rpc.getAccountInfo).not.toHaveBeenCalled();
 });
 
@@ -455,4 +462,55 @@ it("does not double-count a duplicate position returned by RPC", async () => {
     base: 56n,
     quote: 78n,
   });
+});
+
+it("allows only the deployed mainnet program in explicitly opted-in staging", async () => {
+  mock.network = "mainnet-beta";
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  const args = {
+    wallet: wallet.toBase58(),
+    pool: pool.toBase58(),
+    config: config.toBase58(),
+    mint: base.toBase58(),
+    quoteMint: NATIVE_MINT.toBase58(),
+    program: MAINNET_FEE_ESCROW_PROGRAM,
+    recipients: [{ xId: "12345", shareBps: 10000 }],
+  };
+  const tx = new Transaction();
+  await appendFeeAllocation(tx, args);
+  expect(tx.instructions[0].programId).toEqual(MAINNET_FEE_ESCROW_PROGRAM);
+  expect(tx.instructions[0].keys[2].pubkey).toEqual(
+    allocationAddress(pool, MAINNET_FEE_ESCROW_PROGRAM),
+  );
+  await expect(
+    appendFeeAllocation(new Transaction(), { ...args, program }),
+  ).rejects.toThrow("does not match");
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  await expect(appendFeeAllocation(new Transaction(), args)).rejects.toThrow(
+    "explicitly enabled staging",
+  );
+  await expect(
+    buildFeeCollection(
+      pool.toBase58(),
+      wallet.toBase58(),
+      MAINNET_FEE_ESCROW_PROGRAM,
+    ),
+  ).rejects.toThrow("explicitly enabled staging");
+});
+it("rejects mainnet escrow addresses in devnet collection and launch", async () => {
+  await expect(
+    feeMarket(pool.toBase58(), MAINNET_FEE_ESCROW_PROGRAM),
+  ).rejects.toThrow("does not match");
+  await expect(
+    appendFeeAllocation(new Transaction(), {
+      wallet: wallet.toBase58(),
+      pool: pool.toBase58(),
+      config: config.toBase58(),
+      mint: base.toBase58(),
+      quoteMint: NATIVE_MINT.toBase58(),
+      program: MAINNET_FEE_ESCROW_PROGRAM,
+      recipients: [{ xId: "12345", shareBps: 10000 }],
+    }),
+  ).rejects.toThrow("does not match");
 });

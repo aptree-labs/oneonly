@@ -1,3 +1,4 @@
+import { deploymentScope, solanaNetwork } from "@oneonly/core";
 import { createHash } from "node:crypto";
 
 /** Server only. Never expose these credentials through NEXT_PUBLIC variables. */
@@ -15,7 +16,14 @@ export function redisKey(purpose: string, identity: string) {
   const scope = [
     process.env.VERCEL_PROJECT_ID || "oneonly-app",
     process.env.VERCEL_ENV || "local",
-    process.env.SOLANA_NETWORK || "devnet",
+    deploymentScope(
+      solanaNetwork(
+        process.env.SOLANA_NETWORK,
+        process.env.ONEONLY_ENVIRONMENT,
+        process.env.STAGING_MAINNET_ENABLED,
+      ),
+      process.env.ONEONLY_ENVIRONMENT,
+    ),
   ];
   return `oneonly:${scope.join(":")}:${purpose}:${createHash("sha256").update(identity).digest("hex")}`;
 }

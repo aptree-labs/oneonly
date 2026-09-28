@@ -1,3 +1,4 @@
+import { walletSessionCookieName } from "@oneonly/core";
 import { NETWORK } from "@oneonly/protocol";
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
@@ -33,7 +34,9 @@ export async function beginXLink(
   await rateLimit(`x-link:${wallet}`, 4);
   const nonce = randomBytes(32).toString("base64url");
   const jar = await cookies();
-  const walletSession = jar.get(`oneonly-wallet-${NETWORK}`)?.value;
+  const walletSession = jar.get(
+    walletSessionCookieName(NETWORK, process.env.ONEONLY_ENVIRONMENT),
+  )?.value;
   if (!walletSession) return fail("Sign in with your wallet again.", 401);
   const linkCookie = {
     httpOnly: true,

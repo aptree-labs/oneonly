@@ -145,7 +145,7 @@ function SearchContents({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { network } = useLaunchpad();
+  const { staging } = useLaunchpad();
   const id = useId();
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -215,12 +215,12 @@ function SearchContents({
         <input
           ref={input}
           aria-label={
-            network === "devnet"
+            staging
               ? "Search tokens or X fee recipients"
               : "Search name, ticker, or contract address"
           }
           placeholder={
-            network === "devnet"
+            staging
               ? "Search tokens or @accounts"
               : "Search name, ticker, or contract address"
           }
@@ -352,9 +352,7 @@ function SearchContents({
         </div>
       </div>
       <div className="lp-token-search-scroll" ref={list}>
-        {network === "devnet" && (
-          <RecipientList query={search} compact onChoose={onClose} />
-        )}
+        {staging && <RecipientList query={search} compact onChoose={onClose} />}
         <div role="status" className="lp-search-status" aria-live="polite">
           {busy ? (
             <>

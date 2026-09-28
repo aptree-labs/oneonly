@@ -6,13 +6,13 @@ import { createLocalDatabase, walletChallenges, eq } from "@oneonly/db";
 import bs58 from "bs58";
 
 let local: Awaited<ReturnType<typeof createLocalDatabase>>;
-const cookie = vi.hoisted(() => ({ set: vi.fn() }));
+const cookie = vi.hoisted(() => ({ set: vi.fn(), get: vi.fn() }));
 vi.mock("next/headers", () => ({ cookies: async () => cookie }));
 vi.mock("@oneonly/db", async (original) => ({
   ...(await original<typeof import("@oneonly/db")>()),
   getDatabase: async () => local.db,
 }));
-import { challenge, verifyChallenge } from "./auth";
+import { challenge, verifyChallenge, session, walletSessionHash } from "./auth";
 
 beforeAll(async () => {
   vi.stubEnv("LAUNCHPAD_URL", "https://app.oneonly.lol");
@@ -105,4 +105,41 @@ it("rejects expired challenges", async () => {
   await expect(
     verifyChallenge(request.id, signature(wallet, request.message)),
   ).rejects.toThrow("expired");
+});
+
+it("sets a separate host-only staging wallet cookie", async () => {
+  const previous = process.env.ONEONLY_ENVIRONMENT;
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
+  try {
+    const wallet = Keypair.generate();
+    const request = await challenge(wallet.publicKey.toBase58());
+    await verifyChallenge(request.id, signature(wallet, request.message));
+    const [name, , options] = cookie.set.mock.calls.at(-1)!;
+    expect(name).toBe(`oneonly-wallet-staging-${NETWORK}`);
+    expect(options.domain).toBeUndefined();
+    expect(options.httpOnly).toBe(true);
+    expect(options.sameSite).toBe("strict");
+  } finally {
+    vi.stubEnv("ONEONLY_ENVIRONMENT", previous);
+  }
+});
+
+it("rejects production wallet session rows copied into staging", async () => {
+  const previous = process.env.ONEONLY_ENVIRONMENT;
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  try {
+    const wallet = Keypair.generate();
+    const request = await challenge(wallet.publicKey.toBase58());
+    await verifyChallenge(request.id, signature(wallet, request.message));
+    const token = cookie.set.mock.calls.at(-1)![1] as string;
+    cookie.get.mockReturnValue({ value: token });
+    expect(await session()).toBe(wallet.publicKey.toBase58());
+    const prodHash = walletSessionHash(token);
+    vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
+    expect(walletSessionHash(token)).not.toBe(prodHash);
+    expect(await session()).toBeNull();
+  } finally {
+    cookie.get.mockReset();
+    vi.stubEnv("ONEONLY_ENVIRONMENT", previous);
+  }
 });

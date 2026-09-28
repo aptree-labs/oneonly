@@ -4,13 +4,21 @@ export function isStaging(env: DeploymentEnvironment = process.env) {
   return env.ONEONLY_ENVIRONMENT === "staging";
 }
 
-/** Fail the build instead of allowing a demo deployment to spend real funds. */
+/** Real-fund staging requires deliberate opt-in and separate storage. */
 export function assertStagingEnvironment(
   env: DeploymentEnvironment = process.env,
 ) {
   if (!isStaging(env)) return;
-  if (env.SOLANA_NETWORK !== "devnet")
-    throw new Error("Staging requires SOLANA_NETWORK=devnet.");
+  if (
+    env.SOLANA_NETWORK !== "devnet" &&
+    !(
+      env.SOLANA_NETWORK === "mainnet-beta" &&
+      env.STAGING_MAINNET_ENABLED === "true"
+    )
+  )
+    throw new Error(
+      "Staging requires devnet, or explicit STAGING_MAINNET_ENABLED=true for mainnet-beta.",
+    );
   const launchpad = new URL(env.LAUNCHPAD_URL || "http://localhost:3000");
   const oauth = new URL(env.APP_URL || "http://localhost:3000");
   if (
@@ -20,14 +28,28 @@ export function assertStagingEnvironment(
     throw new Error(
       "Staging APP_URL and LAUNCHPAD_URL must both use https://staging.oneonly.lol.",
     );
-  if (
-    env.MAINNET_DATABASE_URL ||
-    (env.DATABASE_URL &&
-      new URL(env.DATABASE_URL).pathname === "/oneonly_mainnet")
-  )
+  try {
+    if (env.MAINNET_DATABASE_URL || !env.DATABASE_URL) throw new Error();
+    const database = new URL(env.DATABASE_URL);
+    if (
+      !["postgres:", "postgresql:"].includes(database.protocol) ||
+      database.searchParams.has("database") ||
+      database.searchParams.has("dbname")
+    )
+      throw new Error();
+    if (env.SOLANA_NETWORK === "mainnet-beta") {
+      if (database.pathname !== "/oneonly_staging_mainnet") throw new Error();
+    } else if (
+      ["/oneonly_mainnet", "/oneonly_staging_mainnet"].includes(
+        decodeURIComponent(database.pathname),
+      )
+    )
+      throw new Error();
+  } catch {
     throw new Error(
-      "Staging must use its own devnet database, without MAINNET_DATABASE_URL.",
+      "Staging must use its own database without MAINNET_DATABASE_URL; mainnet staging requires oneonly_staging_mainnet.",
     );
+  }
 }
 
 /** Production keeps its existing broker/callback for active OAuth sessions. */

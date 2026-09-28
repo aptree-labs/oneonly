@@ -1,4 +1,5 @@
-import { assertStagingDatabase, runtimeDatabaseUrl } from "./connection-options";
+import { createHash } from "node:crypto";
+import { selectedDatabaseUrl, runtimeDatabaseUrl } from "./connection-options";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle as pgliteDrizzle } from "drizzle-orm/pglite";
 import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
@@ -43,18 +44,7 @@ export async function createLocalDatabase(dataDir?: string) {
   return { db, client };
 }
 async function connect() {
-  assertStagingDatabase(process.env);
-  const databaseUrl =
-    process.env.SOLANA_NETWORK === "mainnet-beta"
-      ? process.env.MAINNET_DATABASE_URL
-      : process.env.DATABASE_URL;
-  if (process.env.SOLANA_NETWORK === "mainnet-beta") {
-    const url = databaseUrl;
-    if (!url || new URL(url).pathname !== "/oneonly_mainnet")
-      throw new Error(
-        "Mainnet requires the isolated oneonly_mainnet database.",
-      );
-  }
+  const databaseUrl = selectedDatabaseUrl(process.env);
   if (databaseUrl)
     return postgresDrizzle(
       postgres(runtimeDatabaseUrl(databaseUrl), {
@@ -84,14 +74,35 @@ export type Database = Awaited<ReturnType<typeof connect>>;
 export * from "./market";
 export * from "./office";
 export * from "./leaderboard";
-const globalDb = globalThis as unknown as { oneonlyDb?: Promise<Database> };
+const globalDb = globalThis as unknown as {
+  oneonlyScopedDbs?: Map<string, Promise<Database>>;
+};
 export function getDatabase() {
-  globalDb.oneonlyDb ??= connect().catch((error) => {
-    delete globalDb.oneonlyDb;
-    throw error;
-  });
-  return globalDb.oneonlyDb;
+  // Validate on every acquisition, including before returning a cached client.
+  const url = selectedDatabaseUrl(process.env);
+  const key = createHash("sha256")
+    .update(
+      JSON.stringify([
+        process.env.ONEONLY_ENVIRONMENT || "",
+        process.env.SOLANA_NETWORK || "devnet",
+        url || "",
+        process.env.PGLITE_DATA_DIR || ".data/oneonly",
+      ]),
+    )
+    .digest("hex");
+  const entries: Map<string, Promise<Database>> = (globalDb.oneonlyScopedDbs ??=
+    new Map<string, Promise<Database>>());
+  let pending = entries.get(key);
+  if (!pending) {
+    pending = connect().catch((error) => {
+      entries.delete(key);
+      throw error;
+    });
+    entries.set(key, pending);
+  }
+  return pending;
 }
+
 export async function saveSignup(
   value: { wallet: string } | { xId: string; xUsername: string },
 ) {

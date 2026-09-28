@@ -19,7 +19,7 @@ export function AllocationEditor({
   onChange: (recipients: FeeRecipient[]) => void;
   onValidity: (valid: boolean) => void;
 }) {
-  const { status, devnet, error: statusError } = useFeeStatus();
+  const { status, staging, error: statusError } = useFeeStatus();
   const app = useLaunchpad();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -95,7 +95,7 @@ export function AllocationEditor({
       setLoading(false);
     }
   }
-  if (!devnet) return null;
+  if (!staging) return null;
   return (
     <section className="cf-editor">
       <button
@@ -123,7 +123,7 @@ export function AllocationEditor({
           {!status?.escrowAvailable && (
             <p className="lp-notice">
               {statusError ||
-                "Fee sharing is being prepared for devnet. You can explore recipients, but shared-fee launches are not available yet."}
+                "Fee sharing is being prepared for this environment. You can explore recipients, but shared-fee launches are not available yet."}
             </p>
           )}
           {status && !status.lookupAvailable && (

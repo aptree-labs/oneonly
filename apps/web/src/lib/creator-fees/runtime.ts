@@ -1,5 +1,5 @@
 import {
-  FEE_ESCROW_PROGRAM,
+  assertFeeEscrowProgram,
   configAddress,
   decodeConfig,
   controlAddress,
@@ -14,13 +14,17 @@ import {
 } from "@oneonly/protocol";
 import { fail } from "../launchpad/auth";
 
-/** Opt in only after the deployed devnet program has passed integration checks. */
+/** Staging only; mainnet additionally requires an explicit real-funds opt-in. */
 export async function creatorFeeRuntime(
   options: { allowPaused?: boolean } = {},
 ) {
   if (
     process.env.ONEONLY_ENVIRONMENT !== "staging" ||
-    NETWORK !== "devnet" ||
+    (NETWORK !== "devnet" &&
+      !(
+        NETWORK === "mainnet-beta" &&
+        process.env.STAGING_MAINNET_ENABLED === "true"
+      )) ||
     process.env.CREATOR_FEES_ENABLED !== "true"
   )
     return fail("Creator fee sharing is not enabled in this environment.", 503);
@@ -33,8 +37,11 @@ export async function creatorFeeRuntime(
   } catch {
     return fail("Creator fee verification is not configured yet.", 503);
   }
-  if (!program.equals(FEE_ESCROW_PROGRAM))
+  try {
+    assertFeeEscrowProgram(NETWORK, program);
+  } catch {
     return fail("Unsupported fee escrow program.", 503);
+  }
   // Do not ask recipients to publish a post until this deployment can sign
   // the resulting claim. This key remains server-only and is never returned.
   try {

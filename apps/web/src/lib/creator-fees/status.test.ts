@@ -6,7 +6,13 @@ vi.mock("./projections", () => ({
   cachedFeeBalances: vi.fn(),
   recipientFeeTotals: vi.fn(),
 }));
-vi.mock("@oneonly/protocol", () => ({ client: vi.fn(), PublicKey: class {} }));
+vi.mock("@oneonly/protocol", () => ({
+  client: vi.fn(),
+  PublicKey: class {},
+  get NETWORK() {
+    return process.env.SOLANA_NETWORK ?? "devnet";
+  },
+}));
 vi.mock("next/cache", () => ({
   unstable_cache: (load: () => unknown) => load,
 }));
@@ -55,4 +61,21 @@ it("never returns cached readiness after feature disablement or on mainnet", asy
     escrowAvailable: false,
   });
   expect(calls.runtime).toHaveBeenCalledTimes(1);
+});
+it("separates cached readiness across networks and keeps production disabled", async () => {
+  const { feeStatus } = await import("./service");
+  expect((await feeStatus()).network).toBe("devnet");
+  vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  expect(await feeStatus()).toMatchObject({
+    network: "mainnet-beta",
+    enabled: true,
+    escrowAvailable: true,
+  });
+  expect(calls.runtime).toHaveBeenCalledTimes(2);
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  expect(await feeStatus()).toMatchObject({
+    enabled: false,
+    escrowAvailable: false,
+  });
 });

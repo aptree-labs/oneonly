@@ -82,3 +82,21 @@ it("rejects proof after signing-key rotation", () => {
   vi.stubEnv("X_LINK_SECRET", randomBytes(32).toString("hex"));
   expect(verifyXSession(proof, identity, "session-A")).toBe(false);
 });
+
+it("isolates staging-mainnet wallet and X sessions even with identical network/secret/origin", () => {
+  vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  const stagingCookie = walletSessionCookie();
+  expect(stagingCookie).toBe("oneonly-wallet-staging-mainnet-beta");
+  const proof = signXSession(identity, "same-session");
+  expect(verifyXSession(proof, identity, "same-session")).toBe(true);
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
+  expect(walletSessionCookie()).toBe("oneonly-wallet-mainnet-beta");
+  expect(verifyXSession(proof, identity, "same-session")).toBe(false);
+  const productionProof = signXSession(identity, "same-session");
+  vi.stubEnv("ONEONLY_ENVIRONMENT", "staging");
+  expect(verifyXSession(productionProof, identity, "same-session")).toBe(false);
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "false");
+  expect(verifyXSession(proof, identity, "same-session")).toBe(false);
+  expect(() => walletSessionCookie()).toThrow("STAGING_MAINNET_ENABLED");
+});

@@ -34,7 +34,13 @@ vi.mock("./runtime", () => ({
 vi.mock("./balances", () => ({
   readCreatorFeeBalances: vi.fn().mockRejectedValue(new Error("not deployed")),
 }));
-vi.mock("@oneonly/protocol", () => ({ client: vi.fn(), PublicKey: class {} }));
+vi.mock("@oneonly/protocol", () => ({
+  client: vi.fn(),
+  PublicKey: class {},
+  get NETWORK() {
+    return process.env.SOLANA_NETWORK ?? "devnet";
+  },
+}));
 vi.mock("./provider", async (original) => ({
   ...(await original<typeof import("./provider")>()),
   verifyXPost: vi
@@ -211,7 +217,7 @@ it("atomically rejects concurrent verification and reused post evidence, without
 it("fails closed outside staging devnet", async () => {
   vi.stubEnv("ONEONLY_ENVIRONMENT", "production");
   vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
-  await expect(bindFeeWallet("wallet1", db)).rejects.toThrow("devnet preview");
+  await expect(bindFeeWallet("wallet1", db)).rejects.toThrow("enabled staging");
 });
 
 import { creatorFeeRuntime } from "./runtime";
@@ -374,4 +380,21 @@ it("uses this session's original X verification for a later claim-wallet registr
     wallet: "wallet903",
     xId: "903",
   });
+});
+it("isolates immutable X wallet bindings between devnet and explicitly enabled mainnet staging", async () => {
+  enable();
+  await seed("9081", "wallet-network-test");
+  await bindFeeWallet("wallet-network-test", db);
+  vi.stubEnv("SOLANA_NETWORK", "mainnet-beta");
+  await expect(bindFeeWallet("wallet-network-test", db)).rejects.toThrow(
+    "enabled staging",
+  );
+  vi.stubEnv("STAGING_MAINNET_ENABLED", "true");
+  await bindFeeWallet("wallet-network-test", db);
+  const rows = await db
+    .select()
+    .from(creatorFeeBindings)
+    .where(eq(creatorFeeBindings.xId, "9081"));
+  expect(rows.map((r) => r.network).sort()).toEqual(["devnet", "mainnet-beta"]);
+  expect(rows.every((r) => r.wallet === "wallet-network-test")).toBe(true);
 });

@@ -18,7 +18,7 @@ export const UPGRADEABLE_LOADER = new PublicKey(
 );
 export const DEPLOYMENT_GENESIS = {
   devnet: "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
-  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp",
+  "mainnet-beta": "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d",
 } as const;
 const BUFFER_HEADER = 37,
   PROGRAM_SIZE = 36,
