@@ -94,3 +94,76 @@ describe("fresh X proof", () => {
     ).resolves.toMatchObject({ tweetId: "456" });
   });
 });
+
+const proofUrl = "https://oneonly.lol/app/token/token-1?share=claim-1";
+const linkedChallenge = { ...challenge, proofUrl };
+const linkedPost = {
+  ...post,
+  text: "Trade $ANDY on OneOnly. https://t.co/abc",
+  entities: { urls: [{ url: "https://t.co/abc", expanded_url: proofUrl }] },
+};
+describe("token-link claim proof", () => {
+  it("accepts the exact token link, directly or shortened by X", () => {
+    expect(
+      verifyPostEvidence(linkedPost, "456", linkedChallenge, now).tweetId,
+    ).toBe("456");
+    expect(
+      verifyPostEvidence(
+        { ...post, text: `Trade $ANDY ${proofUrl}` },
+        "456",
+        linkedChallenge,
+        now,
+      ).tweetId,
+    ).toBe("456");
+  });
+  it.each([
+    proofUrl.replace("oneonly.lol", "oneonly.lol.evil.test"),
+    proofUrl.replace("token-1", "token-2"),
+    proofUrl.replace("claim-1", "claim-2"),
+    proofUrl.replace("https:", "http:"),
+    `${proofUrl}-suffix`,
+    `https://evil.test/?redirect=${proofUrl}`,
+  ])("rejects a different destination or claim: %s", (expanded_url) => {
+    expect(() =>
+      verifyPostEvidence(
+        {
+          ...linkedPost,
+          entities: { urls: [{ url: "https://t.co/abc", expanded_url }] },
+        },
+        "456",
+        linkedChallenge,
+        now,
+      ),
+    ).toThrow();
+  });
+  it("does not accept a URL entity absent from the post text", () => {
+    expect(() =>
+      verifyPostEvidence(
+        { ...linkedPost, text: "No token link" },
+        "456",
+        linkedChallenge,
+        now,
+      ),
+    ).toThrow();
+  });
+  it("still requires a fresh original post from the allocated account", () => {
+    for (const override of [
+      { author: { id: "999" } },
+      { isReply: true },
+      { quoted_tweet: {} },
+      { createdAt: "2026-09-26T09:59:00Z" },
+    ]) {
+      expect(() =>
+        verifyPostEvidence(
+          { ...linkedPost, ...override },
+          "456",
+          linkedChallenge,
+          now,
+        ),
+      ).toThrow();
+    }
+    expect(() =>
+      verifyPostEvidence(linkedPost, "456", linkedChallenge, expiresAt),
+    ).toThrow();
+  });
+});

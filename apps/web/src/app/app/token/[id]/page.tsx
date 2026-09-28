@@ -1,4 +1,9 @@
 import { TokenDetail } from "@/components/launchpad/token";
+import {
+  tokenShareTitle,
+  tokenShareDescription,
+  tokenShareUrl,
+} from "@/lib/token-sharing";
 import type { Metadata } from "next";
 import { tokenRecord, tokenDetail } from "@/lib/launchpad/token-detail";
 export async function generateMetadata({
@@ -9,24 +14,27 @@ export async function generateMetadata({
   const { id } = await params;
   try {
     const token = await tokenRecord(id);
-    const title = `${token.name} ($${token.ticker})`,
-      description = token.description.slice(0, 180);
-    const url = `https://oneonly.lol/app/token/${token.id}`;
-    const image = `https://oneonly.lol/api/launchpad/image/${token.imageId}`;
+    const title = tokenShareTitle(token.ticker),
+      description = tokenShareDescription;
+    const url = tokenShareUrl(token.id);
+    const image = new URL(
+      `/api/launchpad/image/${token.imageId}`,
+      url,
+    ).toString();
     return {
-      title,
+      title: { absolute: title },
       description,
       alternates: { canonical: url },
       openGraph: {
         type: "website",
-        title: `${title} — One Only`,
+        title,
         description,
         url,
         images: [{ url: image, width: 512, height: 512, alt: token.name }],
       },
       twitter: {
         card: "summary",
-        title: `${title} — One Only`,
+        title,
         description,
         images: [{ url: image, alt: token.name }],
       },

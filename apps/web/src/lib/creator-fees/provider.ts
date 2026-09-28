@@ -115,6 +115,7 @@ export async function lookupX(
 export type PostChallenge = {
   xId: string;
   code: string;
+  proofUrl?: string;
   createdAt: Date;
   expiresAt: Date;
 };
@@ -151,8 +152,28 @@ export function verifyPostEvidence(
     throw new FeeError(
       "This verification post is too old or the request has expired.",
     );
-  if (!p.text.split(/\s+/).includes(challenge.code))
-    throw new FeeError("The post must contain the exact verification code.");
+  const words = p.text.split(/\s+/);
+  const entities = p.entities as { urls?: unknown } | undefined;
+  // X replaces posted links with t.co URLs. Use only this post's own URL
+  // entities, never profile/quoted-post links or arbitrary redirect fetching.
+  const urls = Array.isArray(entities?.urls) ? entities.urls : [];
+  const hasProofLink =
+    !!challenge.proofUrl &&
+    (words.includes(challenge.proofUrl) ||
+      urls.some((entry: unknown) => {
+        if (!entry || typeof entry !== "object") return false;
+        const url = entry as Record<string, unknown>;
+        return (
+          typeof url.url === "string" &&
+          words.includes(url.url) &&
+          url.expanded_url === challenge.proofUrl
+        );
+      }));
+  // Keep already-issued code-only challenges usable during their short lifetime.
+  if (!hasProofLink && !words.includes(challenge.code))
+    throw new FeeError(
+      "The post must include the provided token link. Copy the post and try again.",
+    );
   return { tweetId: id, publishedAt: new Date(published) };
 }
 export async function verifyXPost(

@@ -1,5 +1,5 @@
 import { beforeAll, afterAll, afterEach, expect, it, vi } from "vitest";
-import { randomUUID, randomBytes } from "node:crypto";
+import { createHash, randomUUID, randomBytes } from "node:crypto";
 import {
   createLocalDatabase,
   creatorFeeProfiles,
@@ -436,4 +436,77 @@ it("assigns the remainder only to the authenticated creator wallet's connected X
       db,
     ),
   ).rejects.toThrow();
+});
+
+it("consumes an internal test grant once across concurrent requests and challenges", async () => {
+  enable();
+  await seed("9901", "wallet9901");
+  await bindFeeWallet("wallet9901", db);
+  const tokenId = randomUUID();
+  await recordFeeAllocation(
+    {
+      tokenId,
+      network: "devnet",
+      pool: "pool9901",
+      mint: "mint",
+      escrow: "escrow",
+      program: "program",
+      recipients: [{ xId: "9901", shareBps: 10000 }],
+    },
+    db,
+  );
+  const scope = {
+    tokenId,
+    network: "devnet",
+    xId: "9901",
+    wallet: "wallet9901",
+    bindingVersion: 1,
+    mint: "mint",
+    amountAtomic: "100",
+    cumulativeAtomic: "100",
+    program: "program",
+    escrow: "escrow",
+  };
+  const id = randomUUID();
+  const row = {
+    ...scope,
+    id,
+    code: "code9901",
+    scopeHash: claimScopeHash(scope),
+    createdAt: new Date(Date.now() - 10000),
+    expiresAt: new Date(Date.now() + 60000),
+  };
+  await db.insert(creatorFeeChallenges).values(row);
+  const code = `OO-TEST-${"a".repeat(32)}`;
+  vi.stubEnv(
+    "CREATOR_FEE_TEST_GRANT",
+    JSON.stringify({
+      ...scope,
+      hash: createHash("sha256").update(code).digest("hex"),
+      expiresAt: row.expiresAt.toISOString(),
+    }),
+  );
+  const results = await Promise.allSettled([
+    verifyFeeChallenge("wallet9901", id, code, db),
+    verifyFeeChallenge("wallet9901", id, code, db),
+  ]);
+  expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+  const verified = await verifiedFeeChallenge("wallet9901", id, db);
+  expect(verified.status).toBe("verified");
+  expect(verified.confirmedSignature).toBeNull();
+  const id2 = randomUUID();
+  await db
+    .insert(creatorFeeChallenges)
+    .values({ ...row, id: id2, code: "code9902" });
+  await expect(verifyFeeChallenge("wallet9901", id2, code, db)).rejects.toThrow(
+    "already been used",
+  );
+  await expect(verifiedFeeChallenge("wallet2", id, db)).rejects.toThrow();
+  await db
+    .update(creatorFeeChallenges)
+    .set({ amountAtomic: "999" })
+    .where(eq(creatorFeeChallenges.id, id));
+  await expect(verifiedFeeChallenge("wallet9901", id, db)).rejects.toThrow(
+    "fresh post",
+  );
 });

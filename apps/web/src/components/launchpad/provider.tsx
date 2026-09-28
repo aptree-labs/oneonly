@@ -32,7 +32,7 @@ import { Buffer } from "buffer";
 import bs58 from "bs58";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   PanelLeftClose,
   PanelLeftOpen,
@@ -162,7 +162,8 @@ function Shell({
   const intentStorageKey = `oneonly-intent-${network}`;
   const wallet = useWallet(),
     modal = useWalletModal(),
-    pathname = usePathname();
+    pathname = usePathname(),
+    router = useRouter();
   const [notice, setNotice] = useState(""),
     [intent, setIntent] = useState<Intent | null>(null),
     [busy, setBusy] = useState(false),
@@ -202,7 +203,9 @@ function Shell({
     setTransactionRevision((value) => value + 1);
     setIntent(null);
     setError("");
-  }, [intent]);
+    if (intent.kind === "launch" && intent.tokenId)
+      router.push(`/app/token/${intent.tokenId}`);
+  }, [intent, router]);
   useEffect(() => {
     if (!success) return;
     const timer = setTimeout(() => setSuccess(null), 10_000);
